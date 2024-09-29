@@ -1,5 +1,5 @@
 import kucoin from './abstract/kucoinfutures.js';
-import type { TransferEntry, Int, OrderSide, OrderType, OHLCV, Order, Trade, OrderRequest, FundingHistory, Balances, Str, Ticker, Tickers, OrderBook, Transaction, Strings, Market, Currency, Num, MarginModification, TradingFeeInterface, Dict, LeverageTier } from './base/types.js';
+import type { TransferEntry, Int, OrderSide, OrderType, OHLCV, Order, Trade, OrderRequest, FundingHistory, Balances, Str, Ticker, Tickers, OrderBook, Transaction, Strings, Market, Currency, Num, MarginModification, TradingFeeInterface, Dict, LeverageTier, MarginMode, Leverage } from './base/types.js';
 /**
  * @class kucoinfutures
  * @augments Exchange
@@ -28,6 +28,7 @@ export default class kucoinfutures extends kucoin {
     fetchTicker(symbol: string, params?: {}): Promise<Ticker>;
     fetchTickers(symbols?: Strings, params?: {}): Promise<Tickers>;
     parseTicker(ticker: Dict, market?: Market): Ticker;
+    fetchBidsAsks(symbols?: Strings, params?: {}): Promise<Tickers>;
     fetchFundingHistory(symbol?: Str, since?: Int, limit?: Int, params?: {}): Promise<FundingHistory[]>;
     fetchPosition(symbol: string, params?: {}): Promise<import("./base/types.js").Position>;
     fetchPositions(symbols?: Strings, params?: {}): Promise<import("./base/types.js").Position[]>;
@@ -86,4 +87,10 @@ export default class kucoinfutures extends kucoin {
     };
     closePosition(symbol: string, side?: OrderSide, params?: {}): Promise<Order>;
     fetchTradingFee(symbol: string, params?: {}): Promise<TradingFeeInterface>;
+    fetchMarginMode(symbol: string, params?: {}): Promise<MarginMode>;
+    parseMarginMode(marginMode: Dict, market?: any): MarginMode;
+    setMarginMode(marginMode: string, symbol?: Str, params?: {}): Promise<MarginMode>;
+    fetchLeverage(symbol: string, params?: {}): Promise<Leverage>;
+    setLeverage(leverage: Int, symbol?: Str, params?: {}): Promise<Leverage>;
+    parseLeverage(leverage: Dict, market?: Market): Leverage;
 }

@@ -4,7 +4,6 @@ var independentreserve$1 = require('./abstract/independentreserve.js');
 var Precise = require('./base/Precise.js');
 var number = require('./base/functions/number.js');
 var sha256 = require('./static_dependencies/noble-hashes/sha256.js');
-require('../ccxt.js');
 var errors = require('./base/errors.js');
 
 //  ---------------------------------------------------------------------------
@@ -155,11 +154,12 @@ class independentreserve extends independentreserve$1 {
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object[]} an array of objects representing market data
          */
-        const baseCurrencies = await this.publicGetGetValidPrimaryCurrencyCodes(params);
+        const baseCurrenciesPromise = this.publicGetGetValidPrimaryCurrencyCodes(params);
         //     ['Xbt', 'Eth', 'Usdt', ...]
-        const quoteCurrencies = await this.publicGetGetValidSecondaryCurrencyCodes(params);
+        const quoteCurrenciesPromise = this.publicGetGetValidSecondaryCurrencyCodes(params);
         //     ['Aud', 'Usd', 'Nzd', 'Sgd']
-        const limits = await this.publicGetGetOrderMinimumVolumes(params);
+        const limitsPromise = this.publicGetGetOrderMinimumVolumes(params);
+        const [baseCurrencies, quoteCurrencies, limits] = await Promise.all([baseCurrenciesPromise, quoteCurrenciesPromise, limitsPromise]);
         //
         //     {
         //         "Xbt": 0.0001,

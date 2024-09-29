@@ -6,7 +6,7 @@
 from ccxt.base.exchange import Exchange
 from ccxt.abstract.htx import ImplicitAPI
 import hashlib
-from ccxt.base.types import Account, Balances, Currencies, Currency, Int, IsolatedBorrowRate, IsolatedBorrowRates, LeverageTier, LeverageTiers, Market, Num, Order, OrderBook, OrderRequest, OrderSide, OrderType, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface, Transaction, TransferEntry
+from ccxt.base.types import Account, Balances, Currencies, Currency, Int, IsolatedBorrowRate, IsolatedBorrowRates, LedgerEntry, LeverageTier, LeverageTiers, Market, Num, Order, OrderBook, OrderRequest, OrderSide, OrderType, Str, Strings, Ticker, Tickers, Trade, TradingFeeInterface, Transaction, TransferEntry
 from typing import List
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -2030,6 +2030,10 @@ class htx(Exchange, ImplicitAPI):
     def fetch_ticker(self, symbol: str, params={}) -> Ticker:
         """
         fetches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+        :see: https://huobiapi.github.io/docs/spot/v1/en/#get-latest-aggregated-ticker
+        :see: https://huobiapi.github.io/docs/dm/v1/en/#get-market-data-overview
+        :see: https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-market-data-overview
+        :see: https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-market-data-overview
         :param str symbol: unified symbol of the market to fetch the ticker for
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a `ticker structure <https://docs.ccxt.com/#/?id=ticker-structure>`
@@ -2323,6 +2327,10 @@ class htx(Exchange, ImplicitAPI):
     def fetch_order_book(self, symbol: str, limit: Int = None, params={}) -> OrderBook:
         """
         fetches information on open orders with bid(buy) and ask(sell) prices, volumes and other data
+        :see: https://huobiapi.github.io/docs/spot/v1/en/#get-market-depth
+        :see: https://huobiapi.github.io/docs/dm/v1/en/#get-market-depth
+        :see: https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-market-depth
+        :see: https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-market-depth
         :param str symbol: unified symbol of the market to fetch the order book for
         :param int [limit]: the maximum amount of order book entries to return
         :param dict [params]: extra parameters specific to the exchange API endpoint
@@ -2534,6 +2542,7 @@ class htx(Exchange, ImplicitAPI):
     def fetch_order_trades(self, id: str, symbol: Str = None, since: Int = None, limit: Int = None, params={}):
         """
         fetch all the trades made from a single order
+        :see: https://huobiapi.github.io/docs/spot/v1/en/#get-the-match-result-of-an-order
         :param str id: order id
         :param str symbol: unified market symbol
         :param int [since]: the earliest time in ms to fetch trades for
@@ -2551,6 +2560,17 @@ class htx(Exchange, ImplicitAPI):
         return self.fetch_spot_order_trades(id, symbol, since, limit, params)
 
     def fetch_spot_order_trades(self, id: str, symbol: Str = None, since: Int = None, limit: Int = None, params={}):
+        """
+         * @ignore
+        fetch all the trades made from a single order
+        :see: https://huobiapi.github.io/docs/spot/v1/en/#get-the-match-result-of-an-order
+        :param str id: order id
+        :param str symbol: unified market symbol
+        :param int [since]: the earliest time in ms to fetch trades for
+        :param int [limit]: the maximum number of trades to retrieve
+        :param dict [params]: extra parameters specific to the exchange API endpoint
+        :returns dict[]: a list of `trade structures <https://docs.ccxt.com/#/?id=trade-structure>`
+        """
         self.load_markets()
         request: dict = {
             'order-id': id,
@@ -2935,6 +2955,7 @@ class htx(Exchange, ImplicitAPI):
     def fetch_accounts(self, params={}) -> List[Account]:
         """
         fetch all the accounts associated with a profile
+        :see: https://huobiapi.github.io/docs/spot/v1/en/#get-all-accounts-of-the-current-user
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: a dictionary of `account structures <https://docs.ccxt.com/#/?id=account-structure>` indexed by the account type
         """
@@ -2998,6 +3019,7 @@ class htx(Exchange, ImplicitAPI):
     def fetch_currencies(self, params={}) -> Currencies:
         """
         fetches all available currencies on an exchange
+        :see: https://huobiapi.github.io/docs/spot/v1/en/#apiv2-currency-amp-chains
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns dict: an associative dictionary of currencies
         """
@@ -5750,6 +5772,7 @@ class htx(Exchange, ImplicitAPI):
 
     def fetch_deposit_addresses_by_network(self, code: str, params={}):
         """
+        :see: https://www.htx.com/en-us/opend/newApiPages/?id=7ec50029-7773-11ed-9966-0242ac110003
         fetch a dictionary of addresses for a currency, indexed by network
         :param str code: unified currency code of the currency for the deposit address
         :param dict [params]: extra parameters specific to the exchange API endpoint
@@ -5780,6 +5803,7 @@ class htx(Exchange, ImplicitAPI):
 
     def fetch_deposit_address(self, code: str, params={}):
         """
+        :see: https://www.htx.com/en-us/opend/newApiPages/?id=7ec50029-7773-11ed-9966-0242ac110003
         fetch the deposit address for a currency associated with self account
         :param str code: unified currency code
         :param dict [params]: extra parameters specific to the exchange API endpoint
@@ -5826,6 +5850,7 @@ class htx(Exchange, ImplicitAPI):
 
     def fetch_deposits(self, code: Str = None, since: Int = None, limit: Int = None, params={}) -> List[Transaction]:
         """
+        :see: https://www.htx.com/en-us/opend/newApiPages/?id=7ec4f050-7773-11ed-9966-0242ac110003
         fetch all deposits made to an account
         :param str code: unified currency code
         :param int [since]: the earliest time in ms to fetch deposits for
@@ -6045,6 +6070,7 @@ class htx(Exchange, ImplicitAPI):
 
     def withdraw(self, code: str, amount: float, address: str, tag=None, params={}):
         """
+        :see: https://www.htx.com/en-us/opend/newApiPages/?id=7ec4cc41-7773-11ed-9966-0242ac110003
         make a withdrawal
         :param str code: unified currency code
         :param float amount: the amount to withdraw
@@ -6974,7 +7000,7 @@ class htx(Exchange, ImplicitAPI):
             'entryPrice': entryPrice,
             'collateral': self.parse_number(collateral),
             'side': side,
-            'unrealizedProfit': unrealizedProfit,
+            'unrealizedPnl': unrealizedProfit,
             'leverage': self.parse_number(leverage),
             'percentage': self.parse_number(percentage),
             'marginMode': marginMode,
@@ -7388,7 +7414,7 @@ class htx(Exchange, ImplicitAPI):
         }
         return self.safe_string(types, type, type)
 
-    def parse_ledger_entry(self, item: dict, currency: Currency = None):
+    def parse_ledger_entry(self, item: dict, currency: Currency = None) -> LedgerEntry:
         #
         #     {
         #         "accountId": 10000001,
@@ -7402,44 +7428,41 @@ class htx(Exchange, ImplicitAPI):
         #         "transferee": 13496526
         #     }
         #
-        id = self.safe_string(item, 'transactId')
         currencyId = self.safe_string(item, 'currency')
         code = self.safe_currency_code(currencyId, currency)
-        amount = self.safe_number(item, 'transactAmt')
+        currency = self.safe_currency(currencyId, currency)
+        id = self.safe_string(item, 'transactId')
         transferType = self.safe_string(item, 'transferType')
-        type = self.parse_ledger_entry_type(transferType)
-        direction = self.safe_string(item, 'direction')
         timestamp = self.safe_integer(item, 'transactTime')
-        datetime = self.iso8601(timestamp)
         account = self.safe_string(item, 'accountId')
-        return {
+        return self.safe_ledger_entry({
+            'info': item,
             'id': id,
-            'direction': direction,
+            'direction': self.safe_string(item, 'direction'),
             'account': account,
             'referenceId': id,
             'referenceAccount': account,
-            'type': type,
+            'type': self.parse_ledger_entry_type(transferType),
             'currency': code,
-            'amount': amount,
+            'amount': self.safe_number(item, 'transactAmt'),
             'timestamp': timestamp,
-            'datetime': datetime,
+            'datetime': self.iso8601(timestamp),
             'before': None,
             'after': None,
             'status': None,
             'fee': None,
-            'info': item,
-        }
+        }, currency)
 
-    def fetch_ledger(self, code: Str = None, since: Int = None, limit: Int = None, params={}):
+    def fetch_ledger(self, code: Str = None, since: Int = None, limit: Int = None, params={}) -> List[LedgerEntry]:
         """
+        fetch the history of changes, actions done by the user or operations that altered the balance of the user
         :see: https://huobiapi.github.io/docs/spot/v1/en/#get-account-history
-        fetch the history of changes, actions done by the user or operations that altered balance of the user
-        :param str code: unified currency code, default is None
+        :param str [code]: unified currency code, default is None
         :param int [since]: timestamp in ms of the earliest ledger entry, default is None
-        :param int [limit]: max number of ledger entrys to return, default is None
+        :param int [limit]: max number of ledger entries to return, default is None
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :param int [params.until]: the latest time in ms to fetch entries for
-        :param boolean [params.paginate]: default False, when True will automatically paginate by calling self endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
+        :param boolean [params.paginate]: default False, when True will automatically paginate by calling self endpoint multiple times. See in the docs all the [available parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-params)
         :returns dict: a `ledger structure <https://docs.ccxt.com/#/?id=ledger-structure>`
         """
         self.load_markets()

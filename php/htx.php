@@ -2059,6 +2059,10 @@ class htx extends Exchange {
     public function fetch_ticker(string $symbol, $params = array ()): array {
         /**
          * fetches a price $ticker, a statistical calculation with the information calculated over the past 24 hours for a specific $market
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#get-latest-aggregated-$ticker
+         * @see https://huobiapi.github.io/docs/dm/v1/en/#get-$market-data-overview
+         * @see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-$market-data-overview
+         * @see https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-$market-data-overview
          * @param {string} $symbol unified $symbol of the $market to fetch the $ticker for
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
          * @return {array} a ~@link https://docs.ccxt.com/#/?id=$ticker-structure $ticker structure~
@@ -2364,6 +2368,10 @@ class htx extends Exchange {
     public function fetch_order_book(string $symbol, ?int $limit = null, $params = array ()): array {
         /**
          * fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#get-$market-depth
+         * @see https://huobiapi.github.io/docs/dm/v1/en/#get-$market-depth
+         * @see https://huobiapi.github.io/docs/coin_margined_swap/v1/en/#get-$market-depth
+         * @see https://huobiapi.github.io/docs/usdt_swap/v1/en/#general-get-$market-depth
          * @param {string} $symbol unified $symbol of the $market to fetch the order book for
          * @param {int} [$limit] the maximum amount of order book entries to return
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
@@ -2590,6 +2598,7 @@ class htx extends Exchange {
     public function fetch_order_trades(string $id, ?string $symbol = null, ?int $since = null, ?int $limit = null, $params = array ()) {
         /**
          * fetch all the trades made from a single order
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#get-the-match-result-of-an-order
          * @param {string} $id order $id
          * @param {string} $symbol unified $market $symbol
          * @param {int} [$since] the earliest time in ms to fetch trades for
@@ -2610,6 +2619,17 @@ class htx extends Exchange {
     }
 
     public function fetch_spot_order_trades(string $id, ?string $symbol = null, ?int $since = null, ?int $limit = null, $params = array ()) {
+        /**
+         * @ignore
+         * fetch all the trades made from a single order
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#get-the-match-result-of-an-order
+         * @param {string} $id order $id
+         * @param {string} $symbol unified market $symbol
+         * @param {int} [$since] the earliest time in ms to fetch trades for
+         * @param {int} [$limit] the maximum number of trades to retrieve
+         * @param {array} [$params] extra parameters specific to the exchange API endpoint
+         * @return {array[]} a list of ~@link https://docs.ccxt.com/#/?$id=trade-structure trade structures~
+         */
         $this->load_markets();
         $request = array(
             'order-id' => $id,
@@ -3035,6 +3055,7 @@ class htx extends Exchange {
     public function fetch_accounts($params = array ()): array {
         /**
          * fetch all the accounts associated with a profile
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#get-all-accounts-of-the-current-user
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
          * @return {array} a dictionary of ~@link https://docs.ccxt.com/#/?id=account-structure account structures~ indexed by the account type
          */
@@ -3107,6 +3128,7 @@ class htx extends Exchange {
     public function fetch_currencies($params = array ()): ?array {
         /**
          * fetches all available currencies on an exchange
+         * @see https://huobiapi.github.io/docs/spot/v1/en/#apiv2-currency-amp-$chains
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
          * @return {array} an associative dictionary of currencies
          */
@@ -6064,6 +6086,7 @@ class htx extends Exchange {
 
     public function fetch_deposit_addresses_by_network(string $code, $params = array ()) {
         /**
+         * @see https://www.htx.com/en-us/opend/newApiPages/?id=7ec50029-7773-11ed-9966-0242ac110003
          * fetch a dictionary of addresses for a $currency, indexed by network
          * @param {string} $code unified $currency $code of the $currency for the deposit address
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
@@ -6095,6 +6118,7 @@ class htx extends Exchange {
 
     public function fetch_deposit_address(string $code, $params = array ()) {
         /**
+         * @see https://www.htx.com/en-us/opend/newApiPages/?id=7ec50029-7773-11ed-9966-0242ac110003
          * fetch the deposit address for a $currency associated with this account
          * @param {string} $code unified $currency $code
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
@@ -6145,6 +6169,7 @@ class htx extends Exchange {
 
     public function fetch_deposits(?string $code = null, ?int $since = null, ?int $limit = null, $params = array ()): array {
         /**
+         * @see https://www.htx.com/en-us/opend/newApiPages/?id=7ec4f050-7773-11ed-9966-0242ac110003
          * fetch all deposits made to an account
          * @param {string} $code unified $currency $code
          * @param {int} [$since] the earliest time in ms to fetch deposits for
@@ -6379,6 +6404,7 @@ class htx extends Exchange {
 
     public function withdraw(string $code, float $amount, string $address, $tag = null, $params = array ()) {
         /**
+         * @see https://www.htx.com/en-us/opend/newApiPages/?id=7ec4cc41-7773-11ed-9966-0242ac110003
          * make a withdrawal
          * @param {string} $code unified $currency $code
          * @param {float} $amount the $amount to withdraw
@@ -7376,7 +7402,7 @@ class htx extends Exchange {
             'entryPrice' => $entryPrice,
             'collateral' => $this->parse_number($collateral),
             'side' => $side,
-            'unrealizedProfit' => $unrealizedProfit,
+            'unrealizedPnl' => $unrealizedProfit,
             'leverage' => $this->parse_number($leverage),
             'percentage' => $this->parse_number($percentage),
             'marginMode' => $marginMode,
@@ -7810,7 +7836,7 @@ class htx extends Exchange {
         return $this->safe_string($types, $type, $type);
     }
 
-    public function parse_ledger_entry(array $item, ?array $currency = null) {
+    public function parse_ledger_entry(array $item, ?array $currency = null): array {
         //
         //     {
         //         "accountId" => 10000001,
@@ -7824,45 +7850,42 @@ class htx extends Exchange {
         //         "transferee" => 13496526
         //     }
         //
-        $id = $this->safe_string($item, 'transactId');
         $currencyId = $this->safe_string($item, 'currency');
         $code = $this->safe_currency_code($currencyId, $currency);
-        $amount = $this->safe_number($item, 'transactAmt');
+        $currency = $this->safe_currency($currencyId, $currency);
+        $id = $this->safe_string($item, 'transactId');
         $transferType = $this->safe_string($item, 'transferType');
-        $type = $this->parse_ledger_entry_type($transferType);
-        $direction = $this->safe_string($item, 'direction');
         $timestamp = $this->safe_integer($item, 'transactTime');
-        $datetime = $this->iso8601($timestamp);
         $account = $this->safe_string($item, 'accountId');
-        return array(
+        return $this->safe_ledger_entry(array(
+            'info' => $item,
             'id' => $id,
-            'direction' => $direction,
+            'direction' => $this->safe_string($item, 'direction'),
             'account' => $account,
             'referenceId' => $id,
             'referenceAccount' => $account,
-            'type' => $type,
+            'type' => $this->parse_ledger_entry_type($transferType),
             'currency' => $code,
-            'amount' => $amount,
+            'amount' => $this->safe_number($item, 'transactAmt'),
             'timestamp' => $timestamp,
-            'datetime' => $datetime,
+            'datetime' => $this->iso8601($timestamp),
             'before' => null,
             'after' => null,
             'status' => null,
             'fee' => null,
-            'info' => $item,
-        );
+        ), $currency);
     }
 
-    public function fetch_ledger(?string $code = null, ?int $since = null, ?int $limit = null, $params = array ()) {
+    public function fetch_ledger(?string $code = null, ?int $since = null, ?int $limit = null, $params = array ()): array {
         /**
+         * fetch the history of changes, actions done by the user or operations that altered the balance of the user
          * @see https://huobiapi.github.io/docs/spot/v1/en/#get-account-history
-         * fetch the history of changes, actions done by the user or operations that altered balance of the user
-         * @param {string} $code unified $currency $code, default is null
+         * @param {string} [$code] unified $currency $code, default is null
          * @param {int} [$since] timestamp in ms of the earliest ledger entry, default is null
-         * @param {int} [$limit] max number of ledger entrys to return, default is null
+         * @param {int} [$limit] max number of ledger entries to return, default is null
          * @param {array} [$params] extra parameters specific to the exchange API endpoint
          * @param {int} [$params->until] the latest time in ms to fetch entries for
-         * @param {boolean} [$params->paginate] default false, when true will automatically $paginate by calling this endpoint multiple times. See in the docs all the [availble parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-$params)
+         * @param {boolean} [$params->paginate] default false, when true will automatically $paginate by calling this endpoint multiple times. See in the docs all the [available parameters](https://github.com/ccxt/ccxt/wiki/Manual#pagination-$params)
          * @return {array} a ~@link https://docs.ccxt.com/#/?id=ledger-structure ledger structure~
          */
         $this->load_markets();
