@@ -6,6 +6,3 @@ ignore = ["F722","F841","F821","E402","E501","E902","E713","E741","E714", "E275"
 exclude = [
 "static_dependencies"
 ]
-
-[tool.setuptools]
-py-modules = []
