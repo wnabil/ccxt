@@ -42,3 +42,5 @@ bin/
 obj/
 
 .custom_gitignore
+python/test.py
+python/log.txt
