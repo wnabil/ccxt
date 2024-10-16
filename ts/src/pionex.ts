@@ -13,26 +13,26 @@ import {
     InvalidAddress,
     ArgumentsRequired,
 } from './base/errors.js';
-// import { Precise } from './base/Precise.js';
+import { Precise } from './base/Precise.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
 import type {
     // Balances,
     Dict,
-    // Int,
+    Int,
     Market,
     MarketType,
     // Num,
-    // OHLCV,
+    OHLCV,
     // Order,
-    // OrderBook,
+    OrderBook,
     // OrderSide,
     // OrderType,
-    // Str,
+    Str,
     // Strings,
     // Ticker,
     // Tickers,
-    // Trade,
+    Trade,
     int,
 } from './base/types.js';
 
@@ -254,7 +254,7 @@ export default class pionex extends Exchange {
         //   "timestamp": 1566676132311
         // }
         const data = this.safeValue (response, 'data', {});
-        const markets = this.safeValue (data, 'symbols', {});
+        const markets = this.safeValue (data, 'symbols', []);
         return this.parseMarkets (markets);
     }
 
@@ -322,6 +322,269 @@ export default class pionex extends Exchange {
         };
     }
 
+    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Trade[]> {
+        /**
+         * @method
+         * @name pionex#fetchTrades
+         * @description get the list of most recent trades for a particular symbol
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-trades
+         * @param {string} symbol unified symbol of the market to fetch trades for
+         * @param {int} [since] timestamp in ms of the earliest trade to fetch
+         * @param {int} [limit] the maximum amount of trades to fetch
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Trade[]} a list of trades
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': market['symbol'],
+        };
+        if (limit !== undefined) {
+            request['limit'] = Math.min (limit, 500); // default 100, max 500
+        }
+        const response = await this.publicGetTrades (this.extend (request, params));
+        // { 
+        //     "data": {
+        //     "trades": [
+        //         {
+        //         "symbol": "BTC_USDT",
+        //         "tradeId": "600848671",
+        //         "price": "7962.62",
+        //         "size": "0.0122",
+        //         "side": "BUY",
+        //         "timestamp": 1566691672311
+        //     },
+        //     {
+        //         "symbol": "BTC_USDT",
+        //         "tradeId": "600848670",
+        //         "price": "7960.12",
+        //         "size": "0.0198",
+        //         "side": "BUY",
+        //         "timestamp": 1566691672311
+        //     }
+        //     ]
+        // },
+        //     "result": true,
+        //     "timestamp": 1566691672311
+        // }
+        const data = this.safeValue (response, 'data', {});
+        const trades = this.safeValue (data, 'trades', []);
+        return this.parseTrades (trades, market, since, limit);
+    }
+
+    parseTrade (trade: Dict, market: Market = undefined): Trade {
+        // {
+        //     "symbol": "BTC_USDT",
+        //     "tradeId": "600848670",
+        //     "price": "7960.12",
+        //     "size": "0.0198",
+        //     "side": "BUY",
+        //     "timestamp": 1566691672311
+        // }
+        const timestamp = this.safeInteger(trade, 'timestamp');
+        return this.safeTrade ({
+            'info': trade,
+            'id': this.safeString(trade, 'id'),
+            'order': undefined,
+            'symbol': this.safeString(trade, 'symbol'),
+            'side': this.safeStringLower(trade, 'side'),
+            'type': this.safeStringLower(trade, 'type'),
+            'takerOrMaker': undefined,
+            'price': this.safeString(trade, 'price'),
+            'amount': this.safeString(trade, 'size'),
+            'cost': undefined,
+            'fee': undefined,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+        }, market);
+    }
+
+    async fetchOrderBook (symbol: string, limit: Int = undefined, params = {}): Promise<OrderBook> {
+        /**
+         * @method
+         * @name pionex#fetchOrderBook
+         * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-depth
+         * @param {string} symbol unified symbol of the market to fetch the order book for
+         * @param {int} [limit] the maximum amount of order book entries to return
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} A dictionary of order book structures
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': market['symbol'],
+        };
+        if (limit !== undefined) {
+            request['limit'] = Math.min (limit, 1000); // default 20, max 1000
+        }
+        const response = await this.publicGetDepth (this.extend (request, params));
+        // { 
+        // "data": {
+        //     "bids": [
+        //         ["29658.37", "0.0123"],
+        //         ["29658.35", "1.1234"],
+        //         ["29657.99", "2.2345"],
+        //         ["29657.56", "6.3456"],
+        //         ["29656.13", "8.4567"]
+        //     ],
+        //     "asks": [
+        //         ["29658.47", "0.0345"],
+        //         ["29658.65", "1.0456"],
+        //         ["29658.89", "3.5567"],
+        //         ["29659.43", "5.2678"],
+        //         ["29659.98", "1.9789"]
+        //     ]，
+        //     "updateTime": 1566676132311
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const orderBook = this.safeDict (response, 'data');
+        return this.parseOrderBook (orderBook, market['symbol'], undefined, 'bids', 'asks');
+    }
+
+    async fetchOHLCV (symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params = {}): Promise<OHLCV[]> {
+        /**
+         * @method
+         * @name pionex#fetchOHLCV
+         * @description fetches historical candlestick data containing the open, high, low, and close price, and the volume of a market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-klines
+         * @param {string} symbol unified symbol of the market to fetch OHLCV data for
+         * @param {string} timeframe the length of time each candle represents
+         * @param {int} [since] timestamp in ms of the earliest candle to fetch
+         * @param {int} [limit] the maximum amount of candles to fetch
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': market['symbol'],
+        };
+        if (timeframe !== undefined) {
+            request['timeframe'] = this.timeframes[timeframe];
+        }
+        if (limit !== undefined) {
+            request['limit'] = Math.min (limit, 500); // default 100, max 500
+        }
+
+        const response = await this.publicGetMarketKlines (this.extend (request, params));
+        const data = this.safeDict(response, 'data', {})
+        const klines = this.safeValue(data, 'klines', [])
+        // {
+        // "result": true,
+        // "data": {
+        //     "klines": [
+        //     {
+        //         "time": 1691649240000,
+        //         "open": "1851.27",
+        //         "close": "1851.32",
+        //         "high": "1851.32",
+        //         "low": "1851.27",
+        //         "volume": "0.542"
+        //     }
+        //     ]
+        // },
+        // "timestamp": 1691649271544
+        // }
+        return this.parseOHLCVs (klines, market, timeframe, since, limit);
+    }
+
+    parseOHLCV (ohlcv, market: Market = undefined): OHLCV {
+        // {
+        //     "time": 1691649240000,
+        //     "open": "1851.27",
+        //     "close": "1851.32",
+        //     "high": "1851.32",
+        //     "low": "1851.27",
+        //     "volume": "0.542"
+        // }
+        return [
+            this.safeInteger(ohlcv, 'time'),  // timestamp
+            this.safeNumber(ohlcv, 'open'),  // open
+            this.safeNumber(ohlcv, 'high'),  // high
+            this.safeNumber(ohlcv, 'low'),  // low
+            this.safeNumber(ohlcv, 'close'),  // close
+            this.safeNumber(ohlcv, 'volume'),  // volume
+        ];
+    }
+
+    async fetchTickers (symbols: Strings = undefined, params = {}): Promise<Tickers> {
+        /**
+         * @method
+         * @name pionex#fetchTickers
+         * @description fetches price tickers for multiple markets, statistical information calculated over the past 24 hours for each market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-24hr-ticker
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-book-ticker
+         * @param {string[]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} a dictionary of ticker structures]
+         */
+        await this.loadMarkets ();
+        const request: Dict = {
+            'type': 'SPOT'
+        };
+
+        const response = await this.publicGetTickers (this.extend (request, params));
+        // { 
+        // "data": {
+        //     "tickers": [
+        //     {
+        //         "symbol": "BTC_USDT",
+        //         "time": 1545291675000,
+        //         "open": "7962.62",
+        //         "close": "7952.32",
+        //         "high": "7971.61",
+        //         "low": "7950.29",
+        //         "volume": "1.537",
+        //         "amount": "12032.56",
+        //         "count": 271585
+        //     },
+        //     {
+        //         "symbol": "ETH_USDT",
+        //         "time": 1545291675000,
+        //         "open": "1963.62",
+        //         "close": "1852.22",
+        //         "high": "1971.11",
+        //         "low": "1850.23",
+        //         "volume": "100.532",
+        //         "amount": "112012.51",
+        //         "count": 432211
+        //     }  
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const response2 = await this.publicGetBookTickers (this.extend (request, params));
+        // { 
+        // "data": {
+        //     "tickers": [
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        const data2 = this.safeDict(response2, 'data', {});
+        const tickers = this.safeList(data, 'tickers', []);
+        const tickers2 = this.safeList(data2, 'tickers', []);
+        const tickersFinal: any = [];
+        Object.keys(tickers).forEach(tk => {
+            const ticker = tickers[tk];
+            Object.keys(tickers2).forEach(tk2 => {
+                const ticker2 = tickers2[tk2];
+                if(ticker2['symbol'] === ticker['symbol']) {
+                    tickersFinal.push(this.extend(ticker, ticker2));
+                }
+            });
+        });
+        return this.parseTickers(tickersFinal, symbols)
+    }
+
+
+
     // parseTicker (ticker: Dict, market: Market = undefined): Ticker {
     //     //
     //     //     {
@@ -381,180 +644,6 @@ export default class pionex extends Exchange {
     //     //     }
     //     //
     //     return this.parseTicker (ticker, market);
-    // }
-
-    // async fetchTickers (symbols: Strings = undefined, params = {}): Promise<Tickers> {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchTickers
-    //      * @description fetches price tickers for multiple markets, statistical information calculated over the past 24 hours for each market
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#oapi-api---trade-data
-    //      * @param {string[]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/#/?id=ticker-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const response = await this.publicGetOapiV2ListTradePrice ();
-    //     //
-    //     //     {
-    //     //         "BTC/USDT":{
-    //     //             "base_volume":229196.34035399999,
-    //     //             "last_price":11881.06,
-    //     //             "quote_volume":19.2909
-    //     //         }
-    //     //     }
-    //     //
-    //     const tickers = [];
-    //     const pairs = Object.keys (response);
-    //     for (let i = 0; i < pairs.length; i++) {
-    //         const marketId = pairs[i];
-    //         const market = this.safeMarket (marketId);
-    //         const rawTicker = this.safeDict (response, marketId, {}) as Dict;
-    //         const ticker = this.parseTicker (rawTicker, market);
-    //         tickers.push (ticker);
-    //     }
-    //     return this.filterByArrayTickers (tickers, 'symbol', symbols);
-    // }
-
-    // async fetchOrderBook (symbol: string, limit: Int = undefined, params = {}): Promise<OrderBook> {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchOrderBook
-    //      * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---order-books
-    //      * @param {string} symbol unified symbol of the market to fetch the order book for
-    //      * @param {int} [limit] the maximum amount of order book entries to return
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} A dictionary of [order book structures]{@link https://docs.ccxt.com/#/?id=order-book-structure} indexed by market symbols
-    //      */
-    //     await this.loadMarkets ();
-    //     const market = this.market (symbol);
-    //     const request: Dict = {
-    //         'quoteCurrencyId': market['quoteId'],
-    //         'baseCurrencyId': market['baseId'],
-    //     };
-    //     if (limit !== undefined) {
-    //         request['depth'] = limit;
-    //     }
-    //     const response = await this.publicGetOpenV2PublicGetOrderBook (this.extend (request, params));
-    //     //
-    //     //     {
-    //     //         "attachment": {
-    //     //             "baseCurrencyId": "2",
-    //     //             "quoteCurrencyId": "14",
-    //     //             "baseCurrencyName": "BTC",
-    //     //             "quoteCurrencyName": "USDT",
-    //     //             "bids": [
-    //     //                 [
-    //     //                     "0.0009",
-    //     //                     "19993.53"
-    //     //                 ],
-    //     //                 [
-    //     //                     "0.001",
-    //     //                     "19675.33"
-    //     //                 ],
-    //     //                 [
-    //     //                     "0.001",
-    //     //                     "19357.13"
-    //     //                 ]
-    //     //             ],
-    //     //             "asks": [
-    //     //                 [
-    //     //                     "0.001",
-    //     //                     "20629.92"
-    //     //                 ],
-    //     //                 [
-    //     //                     "0.001",
-    //     //                     "20948.12"
-    //     //                 ]
-    //     //             ]
-    //     //         },
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     const orderBook = this.safeDict (response, 'attachment');
-    //     return this.parseOrderBook (orderBook, market['symbol'], undefined, 'bids', 'asks');
-    // }
-
-    // parseOHLCV (ohlcv, market: Market = undefined): OHLCV {
-    //     //
-    //     //     {
-    //     //         "changeRate": 0,
-    //     //         "volume": 0,
-    //     //         "closePrice": 101000.0,
-    //     //         "lowPrice": 101000.0,
-    //     //         "highPrice": 101000.0,
-    //     //         "highPrice": 1573195740000L,
-    //     //         "openPrice": 101000.0,
-    //     //         "current": 101000.0,
-    //     //         "currentTime": "2019-11-08 14:49:00",
-    //     //         "createTime": "2019-11-08 14:49:00"
-    //     //     }
-    //     //
-    //     const dateTime = this.safeString (ohlcv, 'createTime');
-    //     let timestamp = this.parse8601 (dateTime);
-    //     if (timestamp !== undefined) {
-    //         timestamp = timestamp - 28800000; // 8 hours
-    //     }
-    //     return [
-    //         timestamp,
-    //         this.safeNumber (ohlcv, 'openPrice'),
-    //         this.safeNumber (ohlcv, 'highPrice'),
-    //         this.safeNumber (ohlcv, 'lowPrice'),
-    //         this.safeNumber (ohlcv, 'closePrice'),
-    //         this.safeNumber (ohlcv, 'volume'),
-    //     ];
-    // }
-
-    // async fetchOHLCV (symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params = {}): Promise<OHLCV[]> {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchOHLCV
-    //      * @description fetches historical candlestick data containing the open, high, low, and close price, and the volume of a market
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---klinecandlestick-data
-    //      * @param {string} symbol unified symbol of the market to fetch OHLCV data for
-    //      * @param {string} timeframe the length of time each candle represents
-    //      * @param {int} [since] timestamp in ms of the earliest candle to fetch
-    //      * @param {int} [limit] the maximum amount of candles to fetch
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
-    //      */
-    //     await this.loadMarkets ();
-    //     const market = this.market (symbol);
-    //     const request: Dict = {
-    //         'duration': this.timeframes[timeframe],
-    //         'quoteCurrencyId': market['quoteId'],
-    //         'baseCurrencyId': market['baseId'],
-    //     };
-    //     if (limit !== undefined) {
-    //         request['limit'] = limit;
-    //     }
-    //     if (since !== undefined) {
-    //         request['startTime'] = since;
-    //     }
-    //     const response = await this.privatePostV2KlineGetKline (this.extend (request, params));
-    //     const data = this.safeList (response, 'attachment', []);
-    //     //
-    //     //     {
-    //     //         "attachment":[
-    //     //                 {
-    //     //                     "changeRate": 0,
-    //     //                     "closePrice": 101000.0,
-    //     //                     "volume": 0,
-    //     //                     "lowPrice": 101000.0,
-    //     //                     "highPrice": 101000.0,
-    //     //                     "highPrice": 1573195740000L,
-    //     //                     "openPrice": 101000.0,
-    //     //                     "current": 101000.0,
-    //     //                     "currentTime": "2019-11-08 14:49:00",
-    //     //                     "createTime": "2019-11-08 14:49:00"
-    //     //                 }
-    //     //         ]
-    //     //     }
-    //     //
-    //     return this.parseOHLCVs (data, market, timeframe, since, limit);
     // }
 
     // parseOrderStatus (status: Str) {
@@ -830,86 +919,6 @@ export default class pionex extends Exchange {
     //     //     }
     //     //
     //     return this.parseOrders (orders, market, since, limit);
-    // }
-
-    // parseTrade (trade: Dict, market: Market = undefined): Trade {
-    //     //
-    //     // fetchOrderTrades
-    //     //         {
-    //     //             "amount": 0.0030965,
-    //     //             "tradeNo": "15681920522485652100751000417788",
-    //     //             "price": "0.03096500",
-    //     //             "num": "0.10000000",
-    //     //             "bi": 1,
-    //     //             "time": "2019-09-11 16:54:12.248"
-    //     //         }
-    //     //
-    //     // fetchMyTrades
-    //     //         {
-    //     //             "buyOrSell": 1,
-    //     //             "orderNo": "16708156853695560053601100247906",
-    //     //             "num": "1",
-    //     //             "price": "16895",
-    //     //             "orderAmount": "16895",
-    //     //             "tradeNum": "0.1",
-    //     //             "tradePrice": "16895",
-    //     //             "tradeAmount": "1689.5",
-    //     //             "fee": "0",
-    //     //             "feeSave": "0",
-    //     //             "status": 1,
-    //     //             "isSelf": false,
-    //     //             "tradeNo": "16708186395087940051961000274150",
-    //     //             "tradeTime": "2022-12-12 12:17:19",
-    //     //             "tradeTimestamp": 1670818639508,
-    //     //             "quoteCurrencyId": 14,
-    //     //             "quoteCurrencyName": "USDT",
-    //     //             "baseCurrencyId": 2,
-    //     //             "baseCurrencyName": "BTC"
-    //     //         }
-    //     const id = this.safeString (trade, 'tradeNo');
-    //     const price = this.safeString (trade, 'price');
-    //     const amount = this.safeString (trade, 'num');
-    //     let timestamp = this.safeInteger (trade, 'tradeTimestamp');
-    //     if (timestamp === undefined) {
-    //         const datetime = this.safeString2 (trade, 'time', 'tradeTime');
-    //         timestamp = this.parse8601 (datetime);
-    //         timestamp = timestamp - 28800000; // 8 hours normalize timestamp
-    //     }
-    //     let symbol = market['symbol'];
-    //     const quoteId = this.safeString (trade, 'quoteCurrencyName');
-    //     const baseId = this.safeString (trade, 'baseCurrencyName');
-    //     if (quoteId !== undefined && baseId !== undefined) {
-    //         symbol = baseId + '/' + quoteId;
-    //     }
-    //     let side: Str = undefined;
-    //     const tradeSide = this.safeInteger (trade, 'buyOrSell');
-    //     if (tradeSide !== undefined) {
-    //         side = (tradeSide === 1) ? 'buy' : 'sell';
-    //     }
-    //     const feeString = this.safeString (trade, 'fee');
-    //     let fee = undefined;
-    //     if (feeString !== undefined) {
-    //         const feeSaveString = this.safeString (trade, 'feeSave');
-    //         fee = {
-    //             'cost': Precise.stringSub (feeString, feeSaveString),
-    //             'currency': quoteId,
-    //         };
-    //     }
-    //     return this.safeTrade ({
-    //         'info': trade,
-    //         'id': id,
-    //         'order': this.safeString (trade, 'orderNo'),
-    //         'symbol': symbol,
-    //         'side': side,
-    //         'type': undefined,
-    //         'takerOrMaker': undefined,
-    //         'price': price,
-    //         'amount': amount,
-    //         'cost': undefined,
-    //         'fee': fee,
-    //         'timestamp': timestamp,
-    //         'datetime': this.iso8601 (timestamp),
-    //     }, market);
     // }
 
     // async fetchOrderTrades (id: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
