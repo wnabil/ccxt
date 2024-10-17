@@ -1530,6 +1530,7 @@ public partial class bitmex : Exchange
             { "average", null },
             { "baseVolume", this.safeString(ticker, "homeNotional24h") },
             { "quoteVolume", this.safeString(ticker, "foreignNotional24h") },
+            { "markPrice", this.safeString(ticker, "markPrice") },
             { "info", ticker },
         }, market);
     }
@@ -2923,11 +2924,11 @@ public partial class bitmex : Exchange
         //    '"bc1qmex3puyrzn2gduqcnlu70c2uscpyaa9nm2l2j9le2lt2wkgmw33sy7ndjg"'
         //
         return new Dictionary<string, object>() {
+            { "info", response },
             { "currency", code },
+            { "network", networkCode },
             { "address", ((string)((string)response).Replace((string)"\"", (string)"")).Replace((string)"\"", (string)"") },
             { "tag", null },
-            { "network", networkCode },
-            { "info", response },
         };
     }
 

@@ -77,6 +77,8 @@ public partial class binance : Exchange
                 { "fetchDepositWithdrawFee", "emulated" },
                 { "fetchDepositWithdrawFees", true },
                 { "fetchFundingHistory", true },
+                { "fetchFundingInterval", "emulated" },
+                { "fetchFundingIntervals", true },
                 { "fetchFundingRate", true },
                 { "fetchFundingRateHistory", true },
                 { "fetchFundingRates", true },
@@ -98,6 +100,8 @@ public partial class binance : Exchange
                 { "fetchMarketLeverageTiers", "emulated" },
                 { "fetchMarkets", true },
                 { "fetchMarkOHLCV", true },
+                { "fetchMarkPrice", true },
+                { "fetchMarkPrices", true },
                 { "fetchMyLiquidations", true },
                 { "fetchMySettlementHistory", true },
                 { "fetchMyTrades", true },
@@ -695,6 +699,7 @@ public partial class binance : Exchange
                         } },
                         { "constituents", 2 },
                         { "openInterest", 1 },
+                        { "fundingInfo", 1 },
                     } },
                 } },
                 { "dapiData", new Dictionary<string, object>() {
@@ -829,6 +834,7 @@ public partial class binance : Exchange
                             { "noSymbol", 10 },
                         } },
                         { "lvtKlines", 1 },
+                        { "convert/exchangeInfo", 4 },
                     } },
                 } },
                 { "fapiData", new Dictionary<string, object>() {
@@ -887,6 +893,7 @@ public partial class binance : Exchange
                         { "feeBurn", 1 },
                         { "symbolConfig", 5 },
                         { "accountConfig", 5 },
+                        { "convert/orderStatus", 5 },
                     } },
                     { "post", new Dictionary<string, object>() {
                         { "batchOrders", 5 },
@@ -901,6 +908,8 @@ public partial class binance : Exchange
                         { "apiReferral/customization", 1 },
                         { "apiReferral/userCustomization", 1 },
                         { "feeBurn", 1 },
+                        { "convert/getQuote", 200 },
+                        { "convert/acceptQuote", 20 },
                     } },
                     { "put", new Dictionary<string, object>() {
                         { "listenKey", 1 },
@@ -1213,6 +1222,13 @@ public partial class binance : Exchange
                     } },
                 } },
                 { "option", new Dictionary<string, object>() {} },
+            } },
+            { "currencies", new Dictionary<string, object>() {
+                { "BNFCR", this.safeCurrencyStructure(new Dictionary<string, object>() {
+                    { "id", "BNFCR" },
+                    { "code", "BNFCR" },
+                    { "precision", this.parseNumber("0.001") },
+                }) },
             } },
             { "commonCurrencies", new Dictionary<string, object>() {
                 { "BCC", "BCC" },
@@ -2610,11 +2626,20 @@ public partial class binance : Exchange
         {
             return null;
         }
-        object promises = new List<object> {this.sapiGetCapitalConfigGetall(parameters), this.sapiGetMarginAllAssets(parameters)};
+        object promises = new List<object> {this.sapiGetCapitalConfigGetall(parameters)};
+        object fetchMargins = this.safeBool(this.options, "fetchMargins", false);
+        if (isTrue(fetchMargins))
+        {
+            ((IList<object>)promises).Add(this.sapiGetMarginAllPairs(parameters));
+        }
         object results = await promiseAll(promises);
         object responseCurrencies = getValue(results, 0);
-        object responseMarginables = getValue(results, 1);
-        object marginablesById = this.indexBy(responseMarginables, "assetName");
+        object marginablesById = null;
+        if (isTrue(fetchMargins))
+        {
+            object responseMarginables = getValue(results, 1);
+            marginablesById = this.indexBy(responseMarginables, "assetName");
+        }
         object result = new Dictionary<string, object>() {};
         for (object i = 0; isLessThan(i, getArrayLength(responseCurrencies)); postFixIncrement(ref i))
         {
@@ -3149,8 +3174,8 @@ public partial class binance : Exchange
         object fees = this.fees;
         object linear = null;
         object inverse = null;
-        object strike = this.safeString(market, "strikePrice");
         object symbol = add(add(bs, "/"), quote);
+        object strike = null;
         if (isTrue(contract))
         {
             if (isTrue(swap))
@@ -3161,6 +3186,7 @@ public partial class binance : Exchange
                 symbol = add(add(add(add(symbol, ":"), settle), "-"), this.yymmdd(expiry));
             } else if (isTrue(option))
             {
+                strike = this.numberToString(this.parseToNumeric(this.safeString(market, "strikePrice")));
                 symbol = add(add(add(add(add(add(add(add(symbol, ":"), settle), "-"), this.yymmdd(expiry)), "-"), strike), "-"), this.safeString(optionParts, 3));
             }
             contractSize = this.safeNumber2(market, "contractSize", "unit", this.parseNumber("1"));
@@ -3827,6 +3853,18 @@ public partial class binance : Exchange
 
     public override object parseTicker(object ticker, object market = null)
     {
+        // markPrices
+        //
+        //     {
+        //         "symbol": "BTCUSDT",
+        //         "markPrice": "11793.63104562",  // mark price
+        //         "indexPrice": "11781.80495970", // index price
+        //         "estimatedSettlePrice": "11781.16138815", // Estimated Settle Price, only useful in the last hour before the settlement starts.
+        //         "lastFundingRate": "0.00038246",  // This is the lastest estimated funding rate
+        //         "nextFundingTime": 1597392000000,
+        //         "interestRate": "0.00010000",
+        //         "time": 1597370495002
+        //     }
         //
         //     {
         //         "symbol": "ETHBTC",
@@ -3930,7 +3968,7 @@ public partial class binance : Exchange
         //         "time":"1673899278514"
         //     }
         //
-        object timestamp = this.safeInteger(ticker, "closeTime");
+        object timestamp = this.safeInteger2(ticker, "closeTime", "time");
         object marketType = null;
         if (isTrue((inOp(ticker, "time"))))
         {
@@ -3977,6 +4015,8 @@ public partial class binance : Exchange
             { "average", null },
             { "baseVolume", baseVolume },
             { "quoteVolume", quoteVolume },
+            { "markPrice", this.safeString(ticker, "markPrice") },
+            { "indexPrice", this.safeString(ticker, "indexPrice") },
             { "info", ticker },
         }, market);
     }
@@ -4247,6 +4287,90 @@ public partial class binance : Exchange
         } else
         {
             throw new NotSupported ((string)add(add(add(this.id, " fetchTickers() does not support "), type), " markets yet")) ;
+        }
+        return this.parseTickers(response, symbols);
+    }
+
+    public async override Task<object> fetchMarkPrice(object symbol, object parameters = null)
+    {
+        /**
+        * @method
+        * @name binance#fetchMarkPrice
+        * @description fetches mark price for the market
+        * @see https://binance-docs.github.io/apidocs/futures/en/#mark-price
+        * @see https://binance-docs.github.io/apidocs/delivery/en/#index-price-and-mark-price
+        * @param {string} symbol unified symbol of the market to fetch the ticker for
+        * @param {object} [params] extra parameters specific to the exchange API endpoint
+        * @param {string} [params.subType] "linear" or "inverse"
+        * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+        */
+        parameters ??= new Dictionary<string, object>();
+        await this.loadMarkets();
+        object market = this.market(symbol);
+        object type = null;
+        var typeparametersVariable = this.handleMarketTypeAndParams("fetchMarkPrice", market, parameters, "swap");
+        type = ((IList<object>)typeparametersVariable)[0];
+        parameters = ((IList<object>)typeparametersVariable)[1];
+        object subType = null;
+        var subTypeparametersVariable = this.handleSubTypeAndParams("fetchMarkPrice", market, parameters, "linear");
+        subType = ((IList<object>)subTypeparametersVariable)[0];
+        parameters = ((IList<object>)subTypeparametersVariable)[1];
+        object request = new Dictionary<string, object>() {
+            { "symbol", getValue(market, "id") },
+        };
+        object response = null;
+        if (isTrue(this.isLinear(type, subType)))
+        {
+            response = await this.fapiPublicGetPremiumIndex(this.extend(request, parameters));
+        } else if (isTrue(this.isInverse(type, subType)))
+        {
+            response = await this.dapiPublicGetPremiumIndex(this.extend(request, parameters));
+        } else
+        {
+            throw new NotSupported ((string)add(add(add(this.id, " fetchMarkPrice() does not support "), type), " markets yet")) ;
+        }
+        if (isTrue(((response is IList<object>) || (response.GetType().IsGenericType && response.GetType().GetGenericTypeDefinition().IsAssignableFrom(typeof(List<>))))))
+        {
+            return this.parseTicker(this.safeDict(response, 0, new Dictionary<string, object>() {}), market);
+        }
+        return this.parseTicker(response, market);
+    }
+
+    public async override Task<object> fetchMarkPrices(object symbols = null, object parameters = null)
+    {
+        /**
+        * @method
+        * @name binance#fetchMarkPrices
+        * @description fetches mark prices for multiple markets
+        * @see https://binance-docs.github.io/apidocs/futures/en/#mark-price
+        * @see https://binance-docs.github.io/apidocs/delivery/en/#index-price-and-mark-price
+        * @param {string[]} [symbols] unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
+        * @param {object} [params] extra parameters specific to the exchange API endpoint
+        * @param {string} [params.subType] "linear" or "inverse"
+        * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+        */
+        parameters ??= new Dictionary<string, object>();
+        await this.loadMarkets();
+        symbols = this.marketSymbols(symbols, null, true, true, true);
+        object market = this.getMarketFromSymbols(symbols);
+        object type = null;
+        var typeparametersVariable = this.handleMarketTypeAndParams("fetchMarkPrices", market, parameters, "swap");
+        type = ((IList<object>)typeparametersVariable)[0];
+        parameters = ((IList<object>)typeparametersVariable)[1];
+        object subType = null;
+        var subTypeparametersVariable = this.handleSubTypeAndParams("fetchMarkPrices", market, parameters, "linear");
+        subType = ((IList<object>)subTypeparametersVariable)[0];
+        parameters = ((IList<object>)subTypeparametersVariable)[1];
+        object response = null;
+        if (isTrue(this.isLinear(type, subType)))
+        {
+            response = await this.fapiPublicGetPremiumIndex(parameters);
+        } else if (isTrue(this.isInverse(type, subType)))
+        {
+            response = await this.dapiPublicGetPremiumIndex(parameters);
+        } else
+        {
+            throw new NotSupported ((string)add(add(add(this.id, " fetchMarkPrices() does not support "), type), " markets yet")) ;
         }
         return this.parseTickers(response, symbols);
     }
@@ -6365,7 +6489,15 @@ public partial class binance : Exchange
                 ((IDictionary<string,object>)request)["quantity"] = this.parseToNumeric(amount);
             } else
             {
-                ((IDictionary<string,object>)request)["quantity"] = this.amountToPrecision(symbol, amount);
+                object marketAmountPrecision = this.safeString(getValue(market, "precision"), "amount");
+                object isPrecisionAvailable = (!isEqual(marketAmountPrecision, null));
+                if (isTrue(isPrecisionAvailable))
+                {
+                    ((IDictionary<string,object>)request)["quantity"] = this.amountToPrecision(symbol, amount);
+                } else
+                {
+                    ((IDictionary<string,object>)request)["quantity"] = this.parseToNumeric(amount); // some options don't have the precision available
+                }
             }
         }
         if (isTrue(isTrue(priceIsRequired) && !isTrue(isPriceMatch)))
@@ -6374,7 +6506,15 @@ public partial class binance : Exchange
             {
                 throw new InvalidOrder ((string)add(add(add(this.id, " createOrder() requires a price argument for a "), type), " order")) ;
             }
-            ((IDictionary<string,object>)request)["price"] = this.priceToPrecision(symbol, price);
+            object pricePrecision = this.safeString(getValue(market, "precision"), "price");
+            object isPricePrecisionAvailable = (!isEqual(pricePrecision, null));
+            if (isTrue(isPricePrecisionAvailable))
+            {
+                ((IDictionary<string,object>)request)["price"] = this.priceToPrecision(symbol, price);
+            } else
+            {
+                ((IDictionary<string,object>)request)["price"] = this.parseToNumeric(price); // some options don't have the precision available
+            }
         }
         if (isTrue(stopPriceIsRequired))
         {
@@ -8850,8 +8990,29 @@ public partial class binance : Exchange
         //         }
         //     }
         //
+        return this.parseDepositAddress(response, currency);
+    }
+
+    public override object parseDepositAddress(object response, object currency = null)
+    {
+        //
+        //     {
+        //         "currency": "XRP",
+        //         "address": "rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh",
+        //         "tag": "108618262",
+        //         "info": {
+        //             "coin": "XRP",
+        //             "address": "rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh",
+        //             "tag": "108618262",
+        //             "url": "https://bithomp.com/explorer/rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh"
+        //         }
+        //     }
+        //
+        object info = this.safeDict(response, "info", new Dictionary<string, object>() {});
+        object url = this.safeString(info, "url");
         object address = this.safeString(response, "address");
-        object url = this.safeString(response, "url");
+        object currencyId = this.safeString(response, "currency");
+        object code = this.safeCurrencyCode(currencyId, currency);
         object impliedNetwork = null;
         if (isTrue(!isEqual(url, null)))
         {
@@ -8888,11 +9049,11 @@ public partial class binance : Exchange
         }
         this.checkAddress(address);
         return new Dictionary<string, object>() {
+            { "info", response },
             { "currency", code },
+            { "network", impliedNetwork },
             { "address", address },
             { "tag", tag },
-            { "network", impliedNetwork },
-            { "info", response },
         };
     }
 
@@ -9717,16 +9878,28 @@ public partial class binance : Exchange
     {
         // ensure it matches with https://www.binance.com/en/futures/funding-history/0
         //
-        //   {
-        //     "symbol": "BTCUSDT",
-        //     "markPrice": "45802.81129892",
-        //     "indexPrice": "45745.47701915",
-        //     "estimatedSettlePrice": "45133.91753671",
-        //     "lastFundingRate": "0.00063521",
-        //     "interestRate": "0.00010000",
-        //     "nextFundingTime": "1621267200000",
-        //     "time": "1621252344001"
-        //  }
+        // fetchFundingRate, fetchFundingRates
+        //
+        //     {
+        //         "symbol": "BTCUSDT",
+        //         "markPrice": "45802.81129892",
+        //         "indexPrice": "45745.47701915",
+        //         "estimatedSettlePrice": "45133.91753671",
+        //         "lastFundingRate": "0.00063521",
+        //         "interestRate": "0.00010000",
+        //         "nextFundingTime": "1621267200000",
+        //         "time": "1621252344001"
+        //     }
+        //
+        // fetchFundingInterval, fetchFundingIntervals
+        //
+        //     {
+        //         "symbol": "BLZUSDT",
+        //         "adjustedFundingRateCap": "0.03000000",
+        //         "adjustedFundingRateFloor": "-0.03000000",
+        //         "fundingIntervalHours": 4,
+        //         "disclaimer": false
+        //     }
         //
         object timestamp = this.safeInteger(contract, "time");
         object marketId = this.safeString(contract, "symbol");
@@ -9737,6 +9910,12 @@ public partial class binance : Exchange
         object estimatedSettlePrice = this.safeNumber(contract, "estimatedSettlePrice");
         object fundingRate = this.safeNumber(contract, "lastFundingRate");
         object fundingTime = this.safeInteger(contract, "nextFundingTime");
+        object interval = this.safeString(contract, "fundingIntervalHours");
+        object intervalString = null;
+        if (isTrue(!isEqual(interval, null)))
+        {
+            intervalString = add(interval, "h");
+        }
         return new Dictionary<string, object>() {
             { "info", contract },
             { "symbol", symbol },
@@ -9755,7 +9934,7 @@ public partial class binance : Exchange
             { "previousFundingRate", null },
             { "previousFundingTimestamp", null },
             { "previousFundingDatetime", null },
-            { "interval", null },
+            { "interval", intervalString },
         };
     }
 
@@ -14154,5 +14333,57 @@ public partial class binance : Exchange
             { "price", null },
             { "fee", null },
         };
+    }
+
+    public async override Task<object> fetchFundingIntervals(object symbols = null, object parameters = null)
+    {
+        /**
+        * @method
+        * @name binance#fetchFundingIntervals
+        * @description fetch the funding rate interval for multiple markets
+        * @see https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Get-Funding-Info
+        * @see https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/Get-Funding-Info
+        * @param {string[]} [symbols] list of unified market symbols
+        * @param {object} [params] extra parameters specific to the exchange API endpoint
+        * @param {string} [params.subType] "linear" or "inverse"
+        * @returns {object[]} a list of [funding rate structures]{@link https://docs.ccxt.com/#/?id=funding-rate-structure}
+        */
+        parameters ??= new Dictionary<string, object>();
+        await this.loadMarkets();
+        object market = null;
+        if (isTrue(!isEqual(symbols, null)))
+        {
+            symbols = this.marketSymbols(symbols);
+            market = this.market(getValue(symbols, 0));
+        }
+        object type = "swap";
+        object subType = null;
+        var subTypeparametersVariable = this.handleSubTypeAndParams("fetchFundingIntervals", market, parameters, "linear");
+        subType = ((IList<object>)subTypeparametersVariable)[0];
+        parameters = ((IList<object>)subTypeparametersVariable)[1];
+        object response = null;
+        if (isTrue(this.isLinear(type, subType)))
+        {
+            response = await this.fapiPublicGetFundingInfo(parameters);
+        } else if (isTrue(this.isInverse(type, subType)))
+        {
+            response = await this.dapiPublicGetFundingInfo(parameters);
+        } else
+        {
+            throw new NotSupported ((string)add(this.id, " fetchFundingIntervals() supports linear and inverse swap contracts only")) ;
+        }
+        //
+        //     [
+        //         {
+        //             "symbol": "BLZUSDT",
+        //             "adjustedFundingRateCap": "0.03000000",
+        //             "adjustedFundingRateFloor": "-0.03000000",
+        //             "fundingIntervalHours": 4,
+        //             "disclaimer": false
+        //         },
+        //     ]
+        //
+        object result = this.parseFundingRates(response, market);
+        return this.filterByArray(result, "symbol", symbols);
     }
 }
