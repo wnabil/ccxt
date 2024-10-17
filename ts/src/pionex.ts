@@ -557,7 +557,7 @@ export default class pionex extends Exchange {
         const data2 = this.safeDict (response2, 'data', {});
         const tickers = this.safeList (data, 'tickers', []);
         const tickers2 = this.safeList (data2, 'tickers', []);
-        const tickersFinal: any = [];
+        const tickersFinal = [];
         const keys = this.keys (tickers);
         for (let i = 0; i < keys.length; i++) {
             const tk = keys[i];
