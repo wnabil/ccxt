@@ -1,40 +1,10 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/pionex.js';
-import {
-    BadRequest,
-    AuthenticationError,
-    InsufficientFunds,
-    OrderNotFound,
-    DDoSProtection,
-    DuplicateOrderId,
-    PermissionDenied,
-    BadSymbol,
-    InvalidAddress,
-    ArgumentsRequired,
-} from './base/errors.js';
-import { Precise } from './base/Precise.js';
+import { BadRequest, AuthenticationError, InsufficientFunds, OrderNotFound, DDoSProtection, DuplicateOrderId, PermissionDenied, BadSymbol, InvalidAddress, ArgumentsRequired } from './base/errors.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
-import type {
-    // Balances,
-    Dict,
-    Int,
-    Market,
-    MarketType,
-    // Num,
-    OHLCV,
-    // Order,
-    OrderBook,
-    // OrderSide,
-    // OrderType,
-    Str,
-    // Strings,
-    // Ticker,
-    // Tickers,
-    Trade,
-    int,
-} from './base/types.js';
+import type { Balances, Dict, Int, Market, MarketType, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, OrderRequest, Str, Strings, Ticker, Tickers, Trade, int } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
@@ -115,7 +85,7 @@ export default class pionex extends Exchange {
                 'fetchPositionsHistory': false,
                 'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
-                'fetchTicker': true,
+                'fetchTicker': false,
                 'fetchTickers': true,
                 'fetchTrades': true,
                 'fetchTradingLimits': false,
@@ -219,14 +189,14 @@ export default class pionex extends Exchange {
     }
 
     async fetchMarkets (params = {}): Promise<Market[]> {
-    /**
-     * @method
-     * @name pionex#fetchMarkets
-     * @description retrieves data on all markets for pionex
-     * @see https://pionex-doc.gitbook.io/apidocs/restful/common/market-data
-     * @param {object} [params] extra parameters specific to the exchange API endpoint
-     * @returns {object[]} an array of objects representing market data
-     */
+        /**
+         * @method
+         * @name pionex#fetchMarkets
+         * @description retrieves data on all markets for pionex
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/common/market-data
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object[]} an array of objects representing market data
+         */
         const response = await this.publicGetCommonSymbols ();
         // {
         //   "data": {
@@ -259,23 +229,23 @@ export default class pionex extends Exchange {
     }
 
     parseMarket (market: Dict): Market {
-    //       {
-    //         "symbol": "BTC_USDT",
-    //         "type": "SPOT",
-    //         "baseCurrency": "BTC",
-    //         "quoteCurrency": "USDT",
-    //         "basePrecision": 6,
-    //         "quotePrecision": 2,
-    //         "amountPrecision": 8,
-    //         "minAmount": "10",
-    //         "minTradeSize": "0.000001",
-    //         "maxTradeSize": "1000",
-    //         "minTradeDumping": "0.000001",
-    //         "maxTradeDumping": "100",
-    //         "enable": true,
-    //         "buyCeiling": "1.1",
-    //         "sellFloor": "0.9"
-    //       }
+        //  {
+        //    "symbol": "BTC_USDT",
+        //    "type": "SPOT",
+        //    "baseCurrency": "BTC",
+        //    "quoteCurrency": "USDT",
+        //    "basePrecision": 6,
+        //    "quotePrecision": 2,
+        //    "amountPrecision": 8,
+        //    "minAmount": "10",
+        //    "minTradeSize": "0.000001",
+        //    "maxTradeSize": "1000",
+        //    "minTradeDumping": "0.000001",
+        //    "maxTradeDumping": "100",
+        //    "enable": true,
+        //    "buyCeiling": "1.1",
+        //    "sellFloor": "0.9"
+        //  }
         const baseId = this.safeString (market, 'baseCurrency');
         const quoteId = this.safeString (market, 'quoteCurrency');
         const type = this.safeStringLower (market, 'type');
@@ -342,8 +312,8 @@ export default class pionex extends Exchange {
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 500); // default 100, max 500
         }
-        const response = await this.publicGetTrades (this.extend (request, params));
-        // { 
+        const response = await this.publicGetMarketTrades (this.extend (request, params));
+        // {
         //     "data": {
         //     "trades": [
         //         {
@@ -373,6 +343,7 @@ export default class pionex extends Exchange {
     }
 
     parseTrade (trade: Dict, market: Market = undefined): Trade {
+        // publicGetMarketTrades
         // {
         //     "symbol": "BTC_USDT",
         //     "tradeId": "600848670",
@@ -381,19 +352,37 @@ export default class pionex extends Exchange {
         //     "side": "BUY",
         //     "timestamp": 1566691672311
         // }
-        const timestamp = this.safeInteger(trade, 'timestamp');
+        //
+        // privateGetTradeFills
+        // {
+        //     "id": 9876543210,
+        //     "orderId": 22334455,
+        //     "symbol": "BTC_USDT",
+        //     "side": "BUY",
+        //     "role":  "TAKER",
+        //     "price": "30000.00",
+        //     "size": "0.1000",
+        //     "fee":  "0.15",
+        //     "feeCoin":  "USDT",
+        //     "timestamp": 1566676132311
+        //   },
+        const timestamp = this.safeInteger (trade, 'timestamp');
         return this.safeTrade ({
             'info': trade,
-            'id': this.safeString(trade, 'id'),
-            'order': undefined,
-            'symbol': this.safeString(trade, 'symbol'),
-            'side': this.safeStringLower(trade, 'side'),
-            'type': this.safeStringLower(trade, 'type'),
-            'takerOrMaker': undefined,
-            'price': this.safeString(trade, 'price'),
-            'amount': this.safeString(trade, 'size'),
+            'id': this.safeString2 (trade, 'tradeId', 'id'),
+            'order': this.safeString (trade, 'orderId'),
+            'symbol': this.safeString (trade, 'symbol'),
+            'side': this.safeStringLower (trade, 'side'),
+            'type': this.safeStringLower (trade, 'type'),
+            'takerOrMaker': this.safeStringLower (trade, 'role'),
+            'price': this.safeString (trade, 'price'),
+            'amount': this.safeString (trade, 'size'),
             'cost': undefined,
-            'fee': undefined,
+            'fee': {
+                'cost': this.safeString (trade, 'fee'),
+                'currency': this.safeCurrencyCode (this.safeString (trade, 'feeCoin')),
+                'rate': undefined,
+            },
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
         }, market);
@@ -418,8 +407,8 @@ export default class pionex extends Exchange {
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 1000); // default 20, max 1000
         }
-        const response = await this.publicGetDepth (this.extend (request, params));
-        // { 
+        const response = await this.publicGetMarketDepth (this.extend (request, params));
+        // {
         // "data": {
         //     "bids": [
         //         ["29658.37", "0.0123"],
@@ -468,10 +457,9 @@ export default class pionex extends Exchange {
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 500); // default 100, max 500
         }
-
         const response = await this.publicGetMarketKlines (this.extend (request, params));
-        const data = this.safeDict(response, 'data', {})
-        const klines = this.safeValue(data, 'klines', [])
+        const data = this.safeDict (response, 'data', {});
+        const klines = this.safeValue (data, 'klines', []);
         // {
         // "result": true,
         // "data": {
@@ -501,12 +489,12 @@ export default class pionex extends Exchange {
         //     "volume": "0.542"
         // }
         return [
-            this.safeInteger(ohlcv, 'time'),  // timestamp
-            this.safeNumber(ohlcv, 'open'),  // open
-            this.safeNumber(ohlcv, 'high'),  // high
-            this.safeNumber(ohlcv, 'low'),  // low
-            this.safeNumber(ohlcv, 'close'),  // close
-            this.safeNumber(ohlcv, 'volume'),  // volume
+            this.safeInteger (ohlcv, 'time'),  // timestamp
+            this.safeNumber (ohlcv, 'open'),  // open
+            this.safeNumber (ohlcv, 'high'),  // high
+            this.safeNumber (ohlcv, 'low'),  // low
+            this.safeNumber (ohlcv, 'close'),  // close
+            this.safeNumber (ohlcv, 'volume'),  // volume
         ];
     }
 
@@ -523,11 +511,10 @@ export default class pionex extends Exchange {
          */
         await this.loadMarkets ();
         const request: Dict = {
-            'type': 'SPOT'
+            'type': 'SPOT',
         };
-
-        const response = await this.publicGetTickers (this.extend (request, params));
-        // { 
+        const response = await this.publicGetMarketTickers (this.extend (request, params));
+        // {
         // "data": {
         //     "tickers": [
         //     {
@@ -551,14 +538,14 @@ export default class pionex extends Exchange {
         //         "volume": "100.532",
         //         "amount": "112012.51",
         //         "count": 432211
-        //     }  
+        //     }
         //     ]
         // },
         // "result": true,
         // "timestamp": 1566691672311
         // }
-        const response2 = await this.publicGetBookTickers (this.extend (request, params));
-        // { 
+        const response2 = await this.publicGetMarketBookTickers (this.extend (request, params));
+        // {
         // "data": {
         //     "tickers": [
         //     ]
@@ -566,547 +553,604 @@ export default class pionex extends Exchange {
         // "result": true,
         // "timestamp": 1566691672311
         // }
-        const data = this.safeDict(response, 'data', {});
-        const data2 = this.safeDict(response2, 'data', {});
-        const tickers = this.safeList(data, 'tickers', []);
-        const tickers2 = this.safeList(data2, 'tickers', []);
+        const data = this.safeDict (response, 'data', {});
+        const data2 = this.safeDict (response2, 'data', {});
+        const tickers = this.safeList (data, 'tickers', []);
+        const tickers2 = this.safeList (data2, 'tickers', []);
         const tickersFinal: any = [];
-        Object.keys(tickers).forEach(tk => {
+        const keys = this.keys (tickers);
+        for (let i = 0; i < keys.length; i++) {
+            const tk = keys[i];
             const ticker = tickers[tk];
-            Object.keys(tickers2).forEach(tk2 => {
+            const keys2 = this.keys (tickers);
+            for (let j = 0; j < keys2.length; j++) {
+                const tk2 = keys[j];
                 const ticker2 = tickers2[tk2];
-                if(ticker2['symbol'] === ticker['symbol']) {
-                    tickersFinal.push(this.extend(ticker, ticker2));
+                if (ticker2['symbol'] === ticker['symbol']) {
+                    tickersFinal.push (this.extend (ticker, ticker2));
                 }
-            });
-        });
-        return this.parseTickers(tickersFinal, symbols)
+            }
+        }
+        return this.parseTickers (tickersFinal, symbols);
     }
 
+    parseTicker (ticker: Dict, market: Market = undefined): Ticker {
+        // {
+        //     "symbol": "ETH_USDT",
+        //     "time": 1545291675000,
+        //     "open": "1963.62",
+        //     "close": "1852.22",
+        //     "high": "1971.11",
+        //     "low": "1850.23",
+        //     "volume": "100.532",
+        //     "amount": "112012.51",
+        //     "count": 432211
+        // }
+        const timestamp = this.safeNumber (ticker, 'time');
+        return this.safeTicker ({
+            'symbol': this.safeString (ticker, 'symbol'),
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'high': this.safeNumber (ticker, 'high'),
+            'low': this.safeNumber (ticker, 'low'),
+            'open': this.safeNumber (ticker, 'open'),
+            'close': this.safeNumber (ticker, 'close'),
+            'baseVolume': this.safeNumber (ticker, 'volume'),
+            'info': ticker,
+            'bid': this.safeNumber (ticker, 'bidPrice'),
+            'bidVolume': this.safeNumber (ticker, 'bidSize'),
+            'ask': this.safeNumber (ticker, 'askPrice'),
+            'askVolume': this.safeNumber (ticker, 'askSize'),
+            'vwap': undefined,
+            'last': this.safeString (ticker, 'last_price'),
+            'previousClose': undefined,
+            'change': undefined,
+            'percentage': undefined,
+            'average': undefined,
+            'quoteVolume': this.safeString (ticker, 'quote_volume'),
+        }, market);
+    }
 
+    async fetchBalance (params = {}): Promise<Balances> {
+        /**
+         * @method
+         * @name pionex#fetchBalance
+         * @description query for balance and get the amount of funds available for trading or funds locked in orders
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/account/get-balance
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} a balance structure
+         */
+        await this.loadMarkets ();
+        const response = await this.privateGetAccountBalances (this.extend (params));
+        // {
+        // "data": {
+        //     "balances": [
+        //     {
+        //         "coin": "BTC",
+        //         "free": "0.9000000",
+        //         "frozen": "0.00000000"
+        //     },
+        //     {
+        //         "coin": "USDT",
+        //         "free": "100.00000000",
+        //         "frozen": "900.00000000"
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        return this.parseBalance (response);
+    }
 
-    // parseTicker (ticker: Dict, market: Market = undefined): Ticker {
-    //     //
-    //     //     {
-    //     //         "base_volume":229196.34035399999,
-    //     //         "last_price":11881.06,
-    //     //         "quote_volume":19.2909
-    //     //     }
-    //     //
-    //     const marketId = this.safeString (ticker, 'id');
-    //     const symbol = this.safeSymbol (marketId, market);
-    //     return this.safeTicker ({
-    //         'symbol': symbol,
-    //         'timestamp': undefined,
-    //         'datetime': undefined,
-    //         'high': undefined,
-    //         'low': undefined,
-    //         'bid': undefined,
-    //         'bidVolume': undefined,
-    //         'ask': undefined,
-    //         'askVolume': undefined,
-    //         'vwap': undefined,
-    //         'open': undefined,
-    //         'close': this.safeString (ticker, 'last_price'),
-    //         'last': this.safeString (ticker, 'last_price'),
-    //         'previousClose': undefined,
-    //         'change': undefined,
-    //         'percentage': undefined,
-    //         'average': undefined,
-    //         'baseVolume': this.safeString (ticker, 'base_volume'),
-    //         'quoteVolume': this.safeString (ticker, 'quote_volume'),
-    //         'info': ticker,
-    //     }, market);
-    // }
+    parseBalance (response): Balances {
+        // {
+        // "data": {
+        //     "balances": [
+        //     {
+        //         "coin": "BTC",
+        //         "free": "0.9000000",
+        //         "frozen": "0.00000000"
+        //     },
+        //     {
+        //         "coin": "USDT",
+        //         "free": "100.00000000",
+        //         "frozen": "900.00000000"
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict (response, 'data', {});
+        const balances = this.safeList (data, 'balances', []);
+        const timestamp = this.safeString (response, 'timestamp');
+        const result: Dict = {
+            'info': balances,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+        };
+        for (let i = 0; i < response.length; i++) {
+            const balance = balances[i];
+            const currencyId = this.safeString (balance, 'coin');
+            const code = this.safeCurrencyCode (currencyId);
+            const account = this.account ();
+            account['free'] = this.safeString (balance, 'free');
+            const frozen = this.safeNumber (balance, 'frozen');
+            account['total'] = (+account['free'] + frozen).toString ();
+            result[code] = account;
+        }
+        return this.safeBalance (result);
+    }
 
-    // async fetchTicker (symbol: string, params = {}): Promise<Ticker> {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchTicker
-    //      * @description fetches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#oapi-api---trade-data
-    //      * @param {string} symbol unified symbol of the market to fetch the ticker for
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/#/?id=ticker-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const market = this.market (symbol);
-    //     const response = await this.publicGetOapiV2ListTradePrice (params);
-    //     const marketId = market['id'] as string;
-    //     const ticker = this.safeDict (response, marketId, {}) as Dict;
-    //     //
-    //     //     {
-    //     //         "BTC/USDT":{
-    //     //             "base_volume":229196.34035399999,
-    //     //             "last_price":11881.06,
-    //     //             "quote_volume":19.2909
-    //     //         }
-    //     //     }
-    //     //
-    //     return this.parseTicker (ticker, market);
-    // }
+    async fetchOrders (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Order[]> {
+        /**
+         * @method
+         * @name latoken#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-all-orders
+         * @param {string} symbol unified market symbol of the market orders were made in
+         * @param {int} [since] the earliest time in ms to fetch orders for
+         * @param {int} [limit] the maximum number of order structures to retrieve
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': market['symbol'],
+        };
+        if (limit === undefined) {
+            limit = 50;  // max = 200
+        } else {
+            limit = Math.min (200, limit);
+        }
+        const response = this.privateGetTradeAllOrders (this.extend (request, params));
+        // {
+        // "data": {
+        //    "orders":[
+        //    {
+        //        // "orderId": 1234567890,
+        //        // "symbol": "BTC_USDT",
+        //        // "type": "LIMIT",
+        //        // "side": "SELL",
+        //        // "price": "30000.00",
+        //        // "size": "0.1000",
+        //        // "filledSize": "0.0500",
+        //        // "filledAmount": "1500.00",
+        //        // "fee":  "0.15",
+        //        // "feeCoin":  "USDT",
+        //        // "status": "OPEN",
+        //        // "IOC": false,
+        //        // "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //        // "source": "API",
+        //        // "createTime": 1566676132311,
+        //        // "updateTime": 1566676132311
+        //     }
+        //    ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict (response, 'data', {});
+        const orders = this.safeList (data, 'orders', []);
+        return this.parseOrders (orders, market, since, limit);
+    }
 
-    // parseOrderStatus (status: Str) {
-    //     const statuses: Dict = {
-    //         '0': 'open',
-    //         '1': 'open',
-    //         '2': 'closed',
-    //         '4': 'canceled',
-    //         '5': 'canceled',
-    //     };
-    //     return this.safeString (statuses, status, undefined);
-    // }
+    async fetchOpenOrders (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Order[]> {
+        /**
+         * @method
+         * @name pionex#fetchOpenOrders
+         * @description fetch all unfilled currently open orders
+         * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---order-list
+         * @param {string} symbol unified market symbol of the market orders were made in
+         * @param {int} [since] the earliest time in ms to fetch orders for
+         * @param {int} [limit] the maximum number of order structures to retrieve
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        if (symbol === undefined) {
+            throw new ArgumentsRequired (this.id + ' fetchOpenOrders() requires a symbol argument');
+        }
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': market['symbol'],
+        };
+        if (limit === undefined) {
+            limit = 50;  // max = 200
+        } else {
+            limit = Math.min (200, limit);
+        }
+        const response = await this.privateGetTradeOpenOrders (this.extend (request, params));
+        // {
+        //     "data": {
+        //       "orders":[
+        //         {
+        //           "orderId": 1234567890,
+        //           "symbol": "BTC_USDT",
+        //           "type": "LIMIT",
+        //           "side": "SELL",
+        //           "price": "30000.00",
+        //           "size": "0.1000",
+        //           "filledSize": "0.0500",
+        //           "filledAmount": "1500.00",
+        //           "fee":  "0.15",
+        //           "feeCoin":  "USDT",
+        //           "status": "OPEN",
+        //           "IOC": false,
+        //           "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //           "source": "API",
+        //           "createTime": 1566676132311,
+        //           "updateTime": 1566676132311
+        //         }
+        //       ]
+        //     },
+        //     "result": true,
+        //     "timestamp": 1566676132311
+        //   }
+        const data = this.safeDict (response, 'data', {});
+        const orders = this.safeList (data, 'orders', []);
+        return this.parseOrders (orders, market, since, limit);
+    }
 
-    // parseOrder (order: Dict, market: Market = undefined): Order {
-    //     //
-    //     // createOrder
-    //     //         "15697850529570392100421100482693"
-    //     //
-    //     // fetchOpenOrders
-    //     //         {
-    //     //             "uid": 0,
-    //     //             "orderNo": "16113081376560890227301101413941",
-    //     //             "orderTime": "2021-01-22 17:35:37",
-    //     //             "orderTimeStamp": 1611308137656,
-    //     //             "baseCurrencyId": 1,
-    //     //             "baseCurrencyName": "TWD",
-    //     //             "quoteCurrencyId": 14,
-    //     //             "quoteCurrencyName": "USDT",
-    //     //             "buyOrSell": "1",
-    //     //             "num": "6.0000000000000000",
-    //     //             "price": "32.5880000000000000",
-    //     //             "remainNum": "2.0000000000000000",
-    //     //             "tradeNum": "4.0000000000000000",
-    //     //             "tradePrice": "31.19800000000000000000",
-    //     //             "tradeAmount": "124.7920000000000000",
-    //     //             "tradeRate": "0.66666666666666666667",
-    //     //             "status": 1,
-    //     //             "type": 1
-    //     //         }
-    //     //
-    //     let id: Str;
-    //     let timestamp: Int = undefined;
-    //     let symbol: Str = undefined;
-    //     let price: Str = undefined;
-    //     let amount: Str = undefined;
-    //     let side: Str = undefined;
-    //     let type: Str = undefined;
-    //     let status: Str = undefined;
-    //     let filled: Str = undefined;
-    //     let remaining: Str = undefined;
-    //     let average: Str = undefined;
-    //     if (typeof order === 'string') {
-    //         id = order;
-    //     } else {
-    //         id = this.safeString (order, 'orderNo');
-    //         timestamp = this.safeInteger (order, 'orderTimeStamp');
-    //         if (timestamp === undefined) {
-    //             const dateTime = this.safeString (order, 'orderTime');
-    //             if (dateTime !== undefined) {
-    //                 timestamp = this.parse8601 (dateTime);
-    //                 timestamp = timestamp - 28800000; // 8 hours
-    //             }
-    //         }
-    //         const orderSide = this.safeString (order, 'buyOrSell');
-    //         if (orderSide !== undefined) {
-    //             side = (orderSide === '1') ? 'buy' : 'sell';
-    //         }
-    //         amount = this.safeString (order, 'num');
-    //         price = this.safeString (order, 'price');
-    //         const quoteId = this.safeString (order, 'quoteCurrencyName');
-    //         const baseId = this.safeString (order, 'baseCurrencyName');
-    //         if (quoteId !== undefined && baseId !== undefined) {
-    //             symbol = baseId + '/' + quoteId;
-    //         }
-    //         const orderType = this.safeString (order, 'type');
-    //         if (orderType !== undefined) {
-    //             type = (orderType === '1') ? 'limit' : 'market';
-    //         }
-    //         filled = this.safeString (order, 'tradeNum');
-    //         remaining = this.safeString (order, 'remainNum');
-    //         status = this.parseOrderStatus (this.safeString (order, 'status'));
-    //         average = this.safeString (order, 'averagePrice');
-    //     }
-    //     return this.safeOrder ({
-    //         'id': id,
-    //         'clientOrderId': undefined,
-    //         'timestamp': timestamp,
-    //         'datetime': this.iso8601 (timestamp),
-    //         'lastTradeTimestamp': undefined,
-    //         'symbol': symbol,
-    //         'type': type,
-    //         'timeInForce': undefined,
-    //         'postOnly': undefined,
-    //         'side': side,
-    //         'price': price,
-    //         'stopPrice': undefined,
-    //         'amount': amount,
-    //         'cost': undefined,
-    //         'average': average,
-    //         'filled': filled,
-    //         'remaining': remaining,
-    //         'status': status,
-    //         'fee': undefined,
-    //         'trades': undefined,
-    //         'info': order,
-    //     }, market);
-    // }
+    async fetchOrder (id: string, symbol: Str = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOrder
+         * @description fetches information on an order made by the user
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-order
+         * @param {string} id the order id
+         * @param {string} symbol unified symbol of the market the order was made in
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets ();
+        const clientOrderId = this.safeValue2 (params, 'client_order_id', 'clientOrderId');
+        const request: Dict = {};
+        let response: any;
+        if (clientOrderId !== undefined) {
+            request['clientOrderId'] = clientOrderId;
+            params = this.omit (params, [ 'client_order_id', 'clientOrderId' ]);
+            response = this.privateGetTradeOrderByClientOrderId (this.extend (request, params));
+        } else {
+            request['orderId'] = id;
+            response = this.privateGetTradeOrder (this.extend (request, params));
+        }
+        // {
+        // "data": {
+        //     "orderId": 1234567890,
+        //     "symbol": "BTC_USDT",
+        //     "type": "LIMIT",
+        //     "side": "SELL",
+        //     "price": "30000.00",
+        //     "size": "0.1000",
+        //     "filledSize": "0.0500",
+        //     "filledAmount": "1500.00",
+        //     "fee":  "0.15",
+        //     "feeCoin":  "USDT",
+        //     "status": "OPEN",
+        //     "IOC":  false,
+        //     "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //     "source": "API",
+        //     "createTime": 1566676132311,
+        //     "updateTime": 1566676132311
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict (response, 'data', {});
+        return this.parseOrder (data, undefined);
+    }
 
-    // async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}) {
-    //     /**
-    //      * @method
-    //      * @name pionex#createOrder
-    //      * @description create a trade order
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---new-order
-    //      * @param {string} symbol unified symbol of the market to create an order in
-    //      * @param {string} type 'market' or 'limit'
-    //      * @param {string} side 'buy' or 'sell'
-    //      * @param {float} amount how much of currency you want to trade in units of base currency
-    //      * @param {float} [price] the price at which the order is to be fulfilled, in units of the quote currency, ignored in market orders
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const market = this.market (symbol);
-    //     const orderType = type.toUpperCase ();
-    //     const orderSide = side.toUpperCase ();
-    //     const request: Dict = {
-    //         'baseCurrencyId': market['baseId'],
-    //         'quoteCurrencyId': market['quoteId'],
-    //         'type': (orderType === 'LIMIT') ? 1 : 2,
-    //         'buyOrSell': (orderSide === 'BUY') ? 1 : 2,
-    //         'num': this.amountToPrecision (symbol, amount),
-    //     };
-    //     if (type === 'limit') {
-    //         request['price'] = this.priceToPrecision (symbol, price);
-    //     }
-    //     const response = await this.privatePostV2OrderOrder (this.extend (request, params));
-    //     //
-    //     //     {
-    //     //         "attachment": "15697850529570392100421100482693",
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     const data = this.safeDict (response, 'attachment');
-    //     return this.parseOrder (data, market);
-    // }
+    parseOrder (order: Dict, market: Market = undefined): Order {
+        // {
+        //     "orderId": 1234567890,
+        //     "symbol": "BTC_USDT",
+        //     "type": "LIMIT",
+        //     "side": "SELL",
+        //     "price": "30000.00",
+        //     "size": "0.1000",
+        //     "filledSize": "0.0500",
+        //     "filledAmount": "1500.00",
+        //     "fee":  "0.15",
+        //     "feeCoin":  "USDT",
+        //     "status": "OPEN",
+        //     "IOC":  false,
+        //     "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //     "source": "API",
+        //     "createTime": 1566676132311,
+        //     "updateTime": 1566676132311
+        // }
+        const timestamp = this.safeNumber (order, 'createTime');
+        const size = this.safeNumber (order, 'size');
+        const filledSize = this.safeNumber (order, 'filledSize');
+        const side = this.safeStringLower (order, 'side');
+        let remaining = size - filledSize;
+        let average = 0;
+        if (filledSize) {
+            average = this.safeNumber (order, 'filledAmount') / filledSize;
+        }
+        if (side === 'buy') {
+            remaining = filledSize - size;
+        }
+        return this.safeOrder ({
+            'id': this.safeString (order, 'orderId'),
+            'clientOrderId': this.safeString (order, 'clientOrderId'),
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'lastTradeTimestamp': this.safeNumber (order, 'updateTime'),
+            'status': this.safeStringLower (order, 'status'),
+            'symbol': this.safeString (order, 'symbol'),
+            'type': this.safeStringLower (order, 'type'),
+            'timeInForce': undefined,
+            'postOnly': this.safeBool (order, 'IOC'),
+            'side': side,
+            'price': this.safeNumber (order, 'price'),
+            'stopPrice': undefined,
+            'triggerPrice': this.safeNumber (order, 'price'),
+            'amount': size,
+            'filled': filledSize,
+            'remaining': remaining,
+            'cost': this.safeNumber (order, 'fee'),
+            'trades': undefined,
+            'average': average,
+            'fee': {
+                'currency': this.safeString (order, 'feeCoin'),
+                'cost': this.safeString (order, 'fee'),
+            },
+            'info': order,
+        }, market);
+    }
 
-    // async cancelOrder (id: string, symbol: Str = undefined, params = {}) {
-    //     /**
-    //      * @method
-    //      * @name pionex#cancelOrder
-    //      * @description cancels an open order
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---cancel-order
-    //      * @param {string} id order id
-    //      * @param {string} symbol unified symbol of the market the order was made in
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const request: Dict = {
-    //         'orderNo': id,
-    //     };
-    //     const response = await this.privatePostV2OrderCancel (this.extend (request, params));
-    //     //
-    //     //     {
-    //     //         "attachment": 200,
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     return response;
-    // }
+    async fetchMyTrades (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchMyTrades
+         * @description fetch all trades made by the user
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-fills
+         * @param {string} symbol unified symbol of the market to fetch trades for
+         * @param {int} [since] timestamp in ms of the earliest trade to fetch
+         * @param {int} [limit] the maximum amount of trades to fetch
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Trade[]} a list of [trade structures]{@link https://docs.ccxt.com/#/?id=public-trades}
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': symbol,
+        };
+        const response = this.privateGetTradeFills (this.extend (request, params));
+        // {
+        // "data": {
+        //     "fills":[
+        //     {
+        //         "id": 9876543210,
+        //         "orderId": 123456789,
+        //         "symbol": "BTC_USDT",
+        //         "side": "SELL",
+        //         "role":  "TAKER",
+        //         "price": "30000.00",
+        //         "size": "0.1000",
+        //         "fee":  "0.15",
+        //         "feeCoin":  "USDT",
+        //         "timestamp": 1566676132311
+        //     },
+        //     {
+        //         "id": 9876543200,
+        //         "orderId": 123456789,
+        //         "symbol": "BTC_USDT",
+        //         "side": "SELL",
+        //         "role":  "TAKER",
+        //         "price": "29000.00",
+        //         "size": "0.1200",
+        //         "fee":  "0.145",
+        //         "feeCoin":  "USDT",
+        //         "timestamp": 1566676132310
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict (response, 'data', {});
+        const fills = this.safeList (data, 'fills', []);
+        return this.parseTrades (fills, market, since, limit);
+    }
 
-    // async fetchOrder (id: string, symbol: Str = undefined, params = {}) {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchOrder
-    //      * @description fetches information on an order made by the user
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---order-status
-    //      * @param {string} id the order id
-    //      * @param {string} symbol unified symbol of the market the order was made in
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const request: Dict = {
-    //         'orderNo': id,
-    //     };
-    //     const response = await this.privatePostV2OrderShowOrderStatus (this.extend (request, params));
-    //     //
-    //     //     {
-    //     //         "attachment": {
-    //     //             "buyOrSell": 1,
-    //     //             "averagePrice": "490849.75000000",
-    //     //             "num": "0.00000000",
-    //     //             "orderTime": "2022-11-29 18:03:06.318",
-    //     //             "price": "490849.75000000",
-    //     //             "status": 4,
-    //     //             "tradeNum": "0.02697000",
-    //     //             "remainNum": "0.97303000",
-    //     //             "baseCurrencyId": 2,
-    //     //             "baseCurrencyName": "BTC",
-    //     //             "quoteCurrencyId": 1,
-    //     //             "quoteCurrencyName": "TWD",
-    //     //             "orderNo": "16697161898600391472461100244406"
-    //     //         },
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     const data = this.safeDict (response, 'attachment');
-    //     return this.parseOrder (data, undefined);
-    // }
+    async fetchOrderTrades (id: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOrderTrades
+         * @description fetch all the trades made from a single order
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-fills-by-order-id
+         * @param {string} id order id
+         * @param {string} symbol unified market symbol
+         * @param {int} [since] the earliest time in ms to fetch trades for
+         * @param {int} [limit] the maximum number of trades to retrieve
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object[]} a list of [trade structures]{@link https://docs.ccxt.com/#/?id=trade-structure}
+         */
+        await this.loadMarkets ();
+        const market = this.safeMarket (symbol);
+        const request: Dict = {
+            'orderId': id,
+        };
+        const response = await this.privateGetTradeFillsByOrderId (this.extend (request, params));
+        // {
+        //     "data": {
+        //       "fills":[
+        //         {
+        //           "id": 9876543210,
+        //           "orderId": 22334455,
+        //           "symbol": "BTC_USDT",
+        //           "side": "BUY",
+        //           "role":  "TAKER",
+        //           "price": "30000.00",
+        //           "size": "0.1000",
+        //           "fee":  "0.15",
+        //           "feeCoin":  "USDT",
+        //           "timestamp": 1566676132311
+        //         },
+        //         {
+        //           "id": 9876543200,
+        //           "orderId": 22334455,
+        //           "symbol": "BTC_USDT",
+        //           "side": "BUY",
+        //           "role":  "TAKER",
+        //           "price": "29000.00",
+        //           "size": "0.1200",
+        //           "fee":  "0.145",
+        //           "feeCoin":  "USDT",
+        //           "timestamp": 1566676132310
+        //         }
+        //       ]
+        //     },
+        //     "result": true,
+        //     "timestamp": 1566691672311
+        //   }
+        const data = this.safeDict (response, 'data');
+        const fills = this.safeList (data, 'fills', []);
+        return this.parseTrades (fills, market, since, limit);
+    }
 
-    // async fetchOpenOrders (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}): Promise<Order[]> {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchOpenOrders
-    //      * @description fetch all unfilled currently open orders
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---order-list
-    //      * @param {string} symbol unified market symbol of the market orders were made in
-    //      * @param {int} [since] the earliest time in ms to fetch orders for
-    //      * @param {int} [limit] the maximum number of order structures to retrieve
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
-    //      */
-    //     if (symbol === undefined) {
-    //         throw new ArgumentsRequired (this.id + ' fetchOpenOrders() requires a symbol argument');
-    //     }
-    //     await this.loadMarkets ();
-    //     const market = this.market (symbol);
-    //     const request: Dict = {
-    //         'quoteCurrencyId': market['quoteId'],
-    //         'baseCurrencyId': market['baseId'],
-    //         // 'start': 0,
-    //     };
-    //     if (limit !== undefined) {
-    //         request['size'] = limit;
-    //     }
-    //     const response = await this.privatePostV2OrderGetOrderList (this.extend (request, params));
-    //     const orders = this.safeList (response, 'attachment');
-    //     //
-    //     //     {
-    //     //         "attachment": [
-    //     //             {
-    //     //                 "uid": 0,
-    //     //                 "orderNo": "16113081376560890227301101413941",
-    //     //                 "orderTime": "2021-01-22 17:35:37",
-    //     //                 "orderTimeStamp": 1611308137656,
-    //     //                 "baseCurrencyId": 1,
-    //     //                 "baseCurrencyName": "TWD",
-    //     //                 "quoteCurrencyId": 14,
-    //     //                 "quoteCurrencyName": "USDT",
-    //     //                 "buyOrSell": "1",
-    //     //                 "num": "6.0000000000000000",
-    //     //                 "price": "32.5880000000000000",
-    //     //                 "remainNum": "2.0000000000000000",
-    //     //                 "tradeNum": "4.0000000000000000",
-    //     //                 "tradePrice": "31.19800000000000000000",
-    //     //                 "tradeAmount": "124.7920000000000000",
-    //     //                 "tradeRate": "0.66666666666666666667",
-    //     //                 "status": 1,
-    //     //                 "type": 1
-    //     //             }
-    //     //         ],
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     return this.parseOrders (orders, market, since, limit);
-    // }
+    async cancelOrder (id: string, symbol: Str = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#cancelOrder
+         * @description cancels an open order
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/cancel-order
+         * @param {string} id order id
+         * @param {string} symbol unified symbol of the market the order was made in
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': market['symbol'],
+            'orderId': id,
+        };
+        this.privateDeleteTradeOrder (this.extend (request, params));
+        // {
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const order = this.safeOrder ({ 'id': id, 'symbol': market['symbol'], 'info': {}}, market);
+        return order;
+    }
 
-    // async fetchOrderTrades (id: string, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchOrderTrades
-    //      * @description fetch all the trades made from a single order
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---order-history
-    //      * @param {string} id order id
-    //      * @param {string} symbol unified market symbol
-    //      * @param {int} [since] the earliest time in ms to fetch trades for
-    //      * @param {int} [limit] the maximum number of trades to retrieve
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object[]} a list of [trade structures]{@link https://docs.ccxt.com/#/?id=trade-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const market = this.safeMarket (symbol);
-    //     const request: Dict = {
-    //         'orderNo': id,
-    //     };
-    //     const response = await this.privatePostV2OrderShowOrderHistory (this.extend (request, params));
-    //     //
-    //     //     {
-    //     //         "attachment": {
-    //     //             "order": {
-    //     //                 "buyOrSell": 1,
-    //     //                 "averagePrice": "491343.74000000",
-    //     //                 "num": "1.00000000",
-    //     //                 "orderTime": "2022-11-29 18:32:22.232",
-    //     //                 "price": "491343.74000000",
-    //     //                 "status": 1,
-    //     //                 "tradeNum": "0.01622200",
-    //     //                 "remainNum": "0.98377800",
-    //     //                 "baseCurrencyId": 2,
-    //     //                 "baseCurrencyName": "BTC",
-    //     //                 "quoteCurrencyId": 1,
-    //     //                 "quoteCurrencyName": "TWD",
-    //     //                 "orderNo": "16697179457740441472471100214402"
-    //     //             },
-    //     //             "trades": [
-    //     //                 {
-    //     //                     "price": "491343.74000000",
-    //     //                     "num": "0.01622200",
-    //     //                     "time": "2022-11-29 18:32:25.789",
-    //     //                     "tradeNo": "16697179457897791471461000223437",
-    //     //                     "amount": "7970.57815028"
-    //     //                 }
-    //     //             ]
-    //     //         },
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     const data = this.safeDict (response, 'attachment');
-    //     const trades = this.safeList (data, 'trades', []);
-    //     return this.parseTrades (trades, market, since, limit);
-    // }
+    async cancelAllOrders (symbol: Str = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#cancelAllOrders
+         * @description cancel all open orders in a market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/cancel-all-orders
+         * @param {string} symbol unified market symbol of the market to cancel orders in
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        this.loadMarkets ();
+        const market = this.market (symbol);
+        const request: Dict = {
+            'symbol': symbol,
+        };
+        this.privateDeleteTradeAllOrders (this.extend (request, params));
+        //  {
+        //  "result": true,
+        //  "timestamp": 1566691672311
+        //  }
+        const order = this.safeOrder ({ 'symbol': market['symbol'], 'info': {}}, market);
+        return [ order ];
+    }
 
-    // async fetchMyTrades (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchMyTrades
-    //      * @description fetch all trades made by the user
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---trade-list
-    //      * @param {string} symbol unified symbol of the market to fetch trades for
-    //      * @param {int} [since] timestamp in ms of the earliest trade to fetch
-    //      * @param {int} [limit] the maximum amount of trades to fetch
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {Trade[]} a list of [trade structures]{@link https://docs.ccxt.com/#/?id=public-trades}
-    //      */
-    //     await this.loadMarkets ();
-    //     const market = this.safeMarket (symbol);
-    //     const request: Dict = {
-    //         // 'buyOrSell': 1,
-    //         // 'start': 0,
-    //     };
-    //     if (market['id'] !== undefined) {
-    //         request['quoteCurrencyId'] = market['quoteId'];
-    //         request['baseCurrencyId'] = market['baseId'];
-    //     }
-    //     if (limit !== undefined) {
-    //         request['size'] = limit; // default 10, max 500
-    //     }
-    //     const response = await this.privatePostV2OrderGetTradeList (this.extend (request, params));
-    //     //
-    //     //     {
-    //     //         "attachment": [
-    //     //             {
-    //     //                 "buyOrSell": 1,
-    //     //                 "orderNo": "16708156853695560053601100247906",
-    //     //                 "num": "1",
-    //     //                 "price": "16895",
-    //     //                 "orderAmount": "16895",
-    //     //                 "tradeNum": "0.1",
-    //     //                 "tradePrice": "16895",
-    //     //                 "tradeAmount": "1689.5",
-    //     //                 "fee": "0",
-    //     //                 "feeSave": "0",
-    //     //                 "status": 1,
-    //     //                 "isSelf": false,
-    //     //                 "tradeNo": "16708186395087940051961000274150",
-    //     //                 "tradeTime": "2022-12-12 12:17:19",
-    //     //                 "tradeTimestamp": 1670818639508,
-    //     //                 "quoteCurrencyId": 14,
-    //     //                 "quoteCurrencyName": "USDT",
-    //     //                 "baseCurrencyId": 2,
-    //     //                 "baseCurrencyName": "BTC"
-    //     //             }
-    //     //         ],
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": 200
-    //     //     }
-    //     //
-    //     const trades = this.safeList (response, 'attachment', []);
-    //     return this.parseTrades (trades, market, since, limit);
-    // }
+    async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#createOrder
+         * @description create a trade order
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/new-order
+         * @param {string} symbol unified symbol of the market to create an order in
+         * @param {string} type 'market' or 'limit'
+         * @param {string} side 'buy' or 'sell'
+         * @param {float} amount how much of currency you want to trade in units of base currency
+         * @param {float} [price] the price at which the order is to be fulfilled, in units of the quote currency, ignored in market orders
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        this.loadMarkets ();
+        const market = this.market (symbol);
+        const clientOrderId = this.safeString2 (params, 'client_order_id', 'clientOrderId', this.uuid ());
+        const request: Dict = {
+            'symbol': market['symbol'],
+            'side': side.toUpperCase (),
+            'type': type.toUpperCase (),
+            'amount': this.amountToPrecision (symbol, amount),
+            'size': this.amountToPrecision (symbol, amount),
+            'IOC': this.safeBool (params, 'postOnly', false),
+            'clientOrderId': clientOrderId,
+        };
+        if (price) {
+            request['price'] = price;
+        }
+        const response = this.privatePostTradeOrder (this.extend (request, params));
+        // {
+        //     "data": {
+        //         "orderId": 1234567890,
+        //         "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194"
+        //     },
+        //     "result": true,
+        //     "timestamp": 1566691672311
+        // }
+        const data = this.safeDict (response, 'data', {});
+        request['orderId'] = data['orderId'];
+        return this.parseOrder (request, market);
+    }
 
-    // parseBalance (response): Balances {
-    //     //
-    //     //     [
-    //     //         {
-    //     //             "currencyId": 4,
-    //     //             "amount": 6.896,
-    //     //             "cashAmount": 6.3855,
-    //     //             "uid": 123,
-    //     //             "currencyName": "BTC"
-    //     //         }
-    //     //     ]
-    //     //
-    //     const result: Dict = {
-    //         'info': response,
-    //     };
-    //     for (let i = 0; i < response.length; i++) {
-    //         const balance = response[i];
-    //         const currencyId = this.safeString (balance, 'currencyName');
-    //         const code = this.safeCurrencyCode (currencyId);
-    //         const amount = this.safeString (balance, 'amount');
-    //         const available = this.safeString (balance, 'cashAmount');
-    //         const account: Dict = {
-    //             'free': available,
-    //             'total': amount,
-    //         };
-    //         result[code] = account;
-    //     }
-    //     return this.safeBalance (result);
-    // }
+    async createOrders (orders: OrderRequest[], params = {}) {
+        /**
+         * @method
+         * @name pionex#createOrders
+         * @description create a list of trade orders
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/new-multiple-order
+         * @param {Array} orders list of orders to create, each object should contain the parameters required by createOrder, namely symbol, type, side, amount, price and params
+         * @param {object} [params]  extra parameters specific to the exchange API endpoint
+         * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets ();
+        const ordersRequests = [];
+        for (let i = 0; i < orders.length; i++) {
+            const rawOrder = orders[i];
+            const symbol = this.safeString (rawOrder, 'symbol');
+            const type = this.safeString (rawOrder, 'type');
+            const side = this.safeStringUpper (rawOrder, 'side');
+            const amount = this.safeNumber (rawOrder, 'amount');
+            const price = this.safeNumber (rawOrder, 'price');
+            const orderParams = this.safeDict (rawOrder, 'params', {});
+            const orderRequest = this.createOrderRequest (symbol, type, side, amount, price, orderParams);
+            ordersRequests.push (orderRequest);
+        }
+        const firstOrder = ordersRequests[0];
+        const firstSymbol = this.safeString (firstOrder, 'symbol');
+        const market = this.market (firstSymbol);
+        const request: Dict = {
+            'symbol': market[firstSymbol],
+            'orders': ordersRequests,
+        };
+        const response = this.privatePostTradeMassOrder (this.extend (request, params));
+        const data = this.safeDict (response, 'data', {});
+        const orderIds = this.safeList (data, 'orderIds', []);
+        const responseOrders = [];
+        for (let i = 0; i < orderIds.length; i++) {
+            const responseOrder = this.safeDict (orderIds, i, {});
+            const orderRequests = this.safeDict (ordersRequests, i, {});
+            orderRequests['orderId'] = responseOrder['orderId'];
+            responseOrders.push (orderRequests);
+        }
+        return this.parseOrders (responseOrders);
+    }
 
-    // async fetchBalance (params = {}): Promise<Balances> {
-    //     /**
-    //      * @method
-    //      * @name pionex#fetchBalance
-    //      * @description query for balance and get the amount of funds available for trading or funds locked in orders
-    //      * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---account-balance
-    //      * @param {object} [params] extra parameters specific to the exchange API endpoint
-    //      * @returns {object} a [balance structure]{@link https://docs.ccxt.com/#/?id=balance-structure}
-    //      */
-    //     await this.loadMarkets ();
-    //     const response = await this.privatePostV2CoinCustomerAccount (params);
-    //     const balances = this.safeList (response, 'attachment', []);
-    //     //
-    //     //     {
-    //     //         "attachment":[
-    //     //             {
-    //     //                 "currencyId": 4,
-    //     //                 "amount": 6.896,
-    //     //                 "cashAmount": 6.3855,
-    //     //                 "uid": 123,
-    //     //                 "currencyName": "BTC"
-    //     //             }
-    //     //         ],
-    //     //         "message": null,
-    //     //         "parameters": null,
-    //     //         "status": "200"
-    //     //     }
-    //     //
-    //     return this.parseBalance (balances);
-    // }
-
-    sign (
-        path,
-        api = 'public',
-        method = 'GET',
-        params = {},
-        headers = undefined,
-        body = undefined
-    ) {
+    sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         const endpointPath = '/api/v1/' + this.implodeParams (path, params);
         let url = this.urls['api'][api] + endpointPath;
         params = this.omit (params, this.extractParams (path));
@@ -1119,16 +1163,12 @@ export default class pionex extends Exchange {
             }
             params['timestamp'] = this.milliseconds ();
             url += '?' + this.urlencode (params);
-            const sortedParams = params;
+            const sortedParams = this.keysort (params);
             let structedPath = method + endpointPath + '?' + this.urlencode (sortedParams);
             if (body) {
                 structedPath = structedPath + body;
             }
-            const signature = this.hmac (
-                this.encode (structedPath),
-                this.encode (this.secret),
-                sha256
-            );
+            const signature = this.hmac (this.encode (structedPath), this.encode (this.secret), sha256);
             headers = {
                 'Content-Type': 'application/json',
                 'PIONEX-KEY': this.apiKey,
@@ -1138,17 +1178,7 @@ export default class pionex extends Exchange {
         return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }
 
-    handleErrors (
-        code: int,
-        reason: string,
-        url: string,
-        method: string,
-        headers: Dict,
-        body: string,
-        response,
-        requestHeaders,
-        requestBody
-    ) {
+    handleErrors (code: int, reason: string, url: string, method: string, headers: Dict, body: string, response, requestHeaders, requestBody) {
         if (response === undefined) {
             return undefined; // fallback to the default error handler
         }
@@ -1168,5 +1198,20 @@ export default class pionex extends Exchange {
             );
         }
         return undefined;
+    }
+
+    private createOrderRequest (symbol: Str, type: OrderType, side: OrderSide, amount: Num, price: Num = undefined, params = {}) {
+        const market = this.market (symbol);
+        const clientOrderId = this.safeString2 (params, 'client_order_id', 'clientOrderId', this.uuid ());
+        params = this.omit (params, [ 'client_order_id', 'clientOrderId' ]);
+        const request: Dict = {
+            'clientOrderId': clientOrderId,
+            'side': side,
+            'symbol': market['symbol'],
+            'type': 'LIMIT',  // Only support LIMIT.
+            'size': this.amountToPrecision (symbol, amount),
+            'price': price,
+        };
+        return this.extend (request, params);
     }
 }
