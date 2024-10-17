@@ -1458,6 +1458,7 @@ class bitmex extends Exchange {
             'average' => null,
             'baseVolume' => $this->safe_string($ticker, 'homeNotional24h'),
             'quoteVolume' => $this->safe_string($ticker, 'foreignNotional24h'),
+            'markPrice' => $this->safe_string($ticker, 'markPrice'),
             'info' => $ticker,
         ), $market);
     }
@@ -2708,7 +2709,7 @@ class bitmex extends Exchange {
         }) ();
     }
 
-    public function fetch_deposit_address(string $code, $params = array ()) {
+    public function fetch_deposit_address(string $code, $params = array ()): PromiseInterface {
         return Async\async(function () use ($code, $params) {
             /**
              * fetch the deposit address for a $currency associated with this account
@@ -2735,11 +2736,11 @@ class bitmex extends Exchange {
             //    '"bc1qmex3puyrzn2gduqcnlu70c2uscpyaa9nm2l2j9le2lt2wkgmw33sy7ndjg"'
             //
             return array(
+                'info' => $response,
                 'currency' => $code,
+                'network' => $networkCode,
                 'address' => str_replace('"', '', $response->replace ('"', '')), // Done twice because some languages only replace the first instance
                 'tag' => null,
-                'network' => $networkCode,
-                'info' => $response,
             );
         }) ();
     }

@@ -45,6 +45,8 @@ export default class bigone extends Exchange {
                 'fetchClosedOrders': true,
                 'fetchCurrencies': true,
                 'fetchDepositAddress': true,
+                'fetchDepositAddresses': false,
+                'fetchDepositAddressesByNetwork': false,
                 'fetchDeposits': true,
                 'fetchFundingRate': false,
                 'fetchMarkets': true,
@@ -725,6 +727,8 @@ export default class bigone extends Exchange {
             'average': undefined,
             'baseVolume': this.safeString2(ticker, 'volume', 'volume24h'),
             'quoteVolume': this.safeString(ticker, 'volume24hInUsd'),
+            'markPrice': this.safeString(ticker, 'markPrice'),
+            'indexPrice': this.safeString(ticker, 'indexPrice'),
             'info': ticker,
         }, market);
     }
@@ -1851,11 +1855,11 @@ export default class bigone extends Exchange {
         const tag = this.safeString(addressObject, 'memo');
         this.checkAddress(address);
         return {
+            'info': response,
             'currency': code,
+            'network': this.networkIdToCode(selectedNetworkId),
             'address': address,
             'tag': tag,
-            'network': this.networkIdToCode(selectedNetworkId),
-            'info': response,
         };
     }
     parseTransactionStatus(status) {

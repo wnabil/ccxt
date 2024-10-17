@@ -100,6 +100,8 @@ public partial class gate : Exchange
                 { "fetchCrossBorrowRates", false },
                 { "fetchCurrencies", true },
                 { "fetchDepositAddress", true },
+                { "fetchDepositAddresses", false },
+                { "fetchDepositAddressesByNetwork", false },
                 { "fetchDeposits", true },
                 { "fetchDepositWithdrawFee", "emulated" },
                 { "fetchDepositWithdrawFees", true },
@@ -2018,11 +2020,10 @@ public partial class gate : Exchange
         this.checkAddress(address);
         return new Dictionary<string, object>() {
             { "info", response },
-            { "code", code },
             { "currency", code },
+            { "network", network },
             { "address", address },
             { "tag", tag },
-            { "network", network },
         };
     }
 
@@ -2692,6 +2693,8 @@ public partial class gate : Exchange
             { "average", null },
             { "baseVolume", baseVolume },
             { "quoteVolume", quoteVolume },
+            { "markPrice", this.safeString(ticker, "mark_price") },
+            { "indexPrice", this.safeString(ticker, "index_price") },
             { "info", ticker },
         }, market);
     }
@@ -3892,32 +3895,61 @@ public partial class gate : Exchange
     public override object parseTransaction(object transaction, object currency = null)
     {
         //
-        // deposits
+        // fetchDeposits
         //
-        //    {
-        //        "id": "d33361395",
-        //        "currency": "USDT_TRX",
-        //        "address": "TErdnxenuLtXfnMafLbfappYdHtnXQ5U4z",
-        //        "amount": "100",
-        //        "txid": "ae9374de34e558562fe18cbb1bf9ab4d9eb8aa7669d65541c9fa2a532c1474a0",
-        //        "timestamp": "1626345819",
-        //        "status": "DONE",
-        //        "memo": ""
-        //    }
+        //     {
+        //         "id": "d33361395",
+        //         "currency": "USDT_TRX",
+        //         "address": "TErdnxenuLtXfnMafLbfappYdHtnXQ5U4z",
+        //         "amount": "100",
+        //         "txid": "ae9374de34e558562fe18cbb1bf9ab4d9eb8aa7669d65541c9fa2a532c1474a0",
+        //         "timestamp": "1626345819",
+        //         "status": "DONE",
+        //         "memo": ""
+        //     }
         //
         // withdraw
         //
-        //    {
-        //        "id": "w13389675",
-        //        "currency": "USDT",
-        //        "amount": "50",
-        //        "address": "TUu2rLFrmzUodiWfYki7QCNtv1akL682p1",
-        //        "memo": null
-        //    }
+        //     {
+        //         "id":"w64413318",
+        //         "currency":"usdt",
+        //         "amount":"10150",
+        //         "address":"0x0ab891497116f7f5532a4c2f4f7b1784488628e1",
+        //         "memo":null,
+        //         "status":"REQUEST",
+        //         "chain":"eth",
+        //         "withdraw_order_id":"",
+        //         "fee_amount":"4.15000000"
+        //     }
+        //
+        // fetchWithdrawals
+        //
+        //     {
+        //         "id": "210496",
+        //         "timestamp": "1542000000",
+        //         "withdraw_order_id": "order_123456",
+        //         "currency": "USDT",
+        //         "address": "1HkxtBAMrA3tP5ENnYY2CZortjZvFDH5Cs",
+        //         "txid": "128988928203223323290",
+        //         "block_number": "41575382",
+        //         "amount": "222.61",
+        //         "fee": "0.01",
+        //         "memo": "",
+        //         "status": "DONE",
+        //         "chain": "TRX"
+        //     }
+        //
+        //     {
+        //         "id": "w13389675",
+        //         "currency": "USDT",
+        //         "amount": "50",
+        //         "address": "TUu2rLFrmzUodiWfYki7QCNtv1akL682p1",
+        //         "memo": null
+        //     }
         //
         //     {
         //         "currency":"usdt",
-        //         "address":"0x01b0A9b7b4CdE774AF0f3E47CB4f1c2CCdBa0806",
+        //         "address":"0x01c0A9b7b4CdE774AF0f3E47CB4f1c2CCdBa0806",
         //         "amount":"1880",
         //         "chain":"eth"
         //     }
@@ -3937,7 +3969,7 @@ public partial class gate : Exchange
                 type = this.parseTransactionType(getValue(id, 0));
             }
         }
-        object feeCostString = this.safeString(transaction, "fee");
+        object feeCostString = this.safeString2(transaction, "fee", "fee_amount");
         if (isTrue(isEqual(type, "withdrawal")))
         {
             amountString = Precise.stringSub(amountString, feeCostString);

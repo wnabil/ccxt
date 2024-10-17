@@ -91,6 +91,8 @@ export default class binance extends Exchange {
                 'fetchDepositWithdrawFee': 'emulated',
                 'fetchDepositWithdrawFees': true,
                 'fetchFundingHistory': true,
+                'fetchFundingInterval': 'emulated',
+                'fetchFundingIntervals': true,
                 'fetchFundingRate': true,
                 'fetchFundingRateHistory': true,
                 'fetchFundingRates': true,
@@ -112,6 +114,8 @@ export default class binance extends Exchange {
                 'fetchMarketLeverageTiers': 'emulated',
                 'fetchMarkets': true,
                 'fetchMarkOHLCV': true,
+                'fetchMarkPrice': true,
+                'fetchMarkPrices': true,
                 'fetchMyLiquidations': true,
                 'fetchMySettlementHistory': true,
                 'fetchMyTrades': true,
@@ -713,6 +717,7 @@ export default class binance extends Exchange {
                         'ticker/bookTicker': { 'cost': 2, 'noSymbol': 5 },
                         'constituents': 2,
                         'openInterest': 1,
+                        'fundingInfo': 1,
                     },
                 },
                 'dapiData': {
@@ -802,6 +807,7 @@ export default class binance extends Exchange {
                         'constituents': 2,
                         'apiTradingStatus': { 'cost': 1, 'noSymbol': 10 },
                         'lvtKlines': 1,
+                        'convert/exchangeInfo': 4,
                     },
                 },
                 'fapiData': {
@@ -855,6 +861,7 @@ export default class binance extends Exchange {
                         'feeBurn': 1,
                         'symbolConfig': 5,
                         'accountConfig': 5,
+                        'convert/orderStatus': 5,
                     },
                     'post': {
                         'batchOrders': 5,
@@ -870,6 +877,8 @@ export default class binance extends Exchange {
                         'apiReferral/customization': 1,
                         'apiReferral/userCustomization': 1,
                         'feeBurn': 1,
+                        'convert/getQuote': 200,
+                        'convert/acceptQuote': 20,
                     },
                     'put': {
                         'listenKey': 1,
@@ -1195,6 +1204,9 @@ export default class binance extends Exchange {
                     },
                 },
                 'option': {},
+            },
+            'currencies': {
+                'BNFCR': this.safeCurrencyStructure({ 'id': 'BNFCR', 'code': 'BNFCR', 'precision': this.parseNumber('0.001') }),
             },
             'commonCurrencies': {
                 'BCC': 'BCC',
@@ -2668,11 +2680,18 @@ export default class binance extends Exchange {
         if (apiBackup !== undefined) {
             return undefined;
         }
-        const promises = [this.sapiGetCapitalConfigGetall(params), this.sapiGetMarginAllAssets(params)];
+        const promises = [this.sapiGetCapitalConfigGetall(params)];
+        const fetchMargins = this.safeBool(this.options, 'fetchMargins', false);
+        if (fetchMargins) {
+            promises.push(this.sapiGetMarginAllPairs(params));
+        }
         const results = await Promise.all(promises);
         const responseCurrencies = results[0];
-        const responseMarginables = results[1];
-        const marginablesById = this.indexBy(responseMarginables, 'assetName');
+        let marginablesById = undefined;
+        if (fetchMargins) {
+            const responseMarginables = results[1];
+            marginablesById = this.indexBy(responseMarginables, 'assetName');
+        }
         const result = {};
         for (let i = 0; i < responseCurrencies.length; i++) {
             //
@@ -3187,8 +3206,8 @@ export default class binance extends Exchange {
         let fees = this.fees;
         let linear = undefined;
         let inverse = undefined;
-        const strike = this.safeString(market, 'strikePrice');
         let symbol = base + '/' + quote;
+        let strike = undefined;
         if (contract) {
             if (swap) {
                 symbol = symbol + ':' + settle;
@@ -3197,6 +3216,7 @@ export default class binance extends Exchange {
                 symbol = symbol + ':' + settle + '-' + this.yymmdd(expiry);
             }
             else if (option) {
+                strike = this.numberToString(this.parseToNumeric(this.safeString(market, 'strikePrice')));
                 symbol = symbol + ':' + settle + '-' + this.yymmdd(expiry) + '-' + strike + '-' + this.safeString(optionParts, 3);
             }
             contractSize = this.safeNumber2(market, 'contractSize', 'unit', this.parseNumber('1'));
@@ -3814,6 +3834,18 @@ export default class binance extends Exchange {
         return orderbook;
     }
     parseTicker(ticker, market = undefined) {
+        // markPrices
+        //
+        //     {
+        //         "symbol": "BTCUSDT",
+        //         "markPrice": "11793.63104562",  // mark price
+        //         "indexPrice": "11781.80495970", // index price
+        //         "estimatedSettlePrice": "11781.16138815", // Estimated Settle Price, only useful in the last hour before the settlement starts.
+        //         "lastFundingRate": "0.00038246",  // This is the lastest estimated funding rate
+        //         "nextFundingTime": 1597392000000,
+        //         "interestRate": "0.00010000",
+        //         "time": 1597370495002
+        //     }
         //
         //     {
         //         "symbol": "ETHBTC",
@@ -3917,7 +3949,7 @@ export default class binance extends Exchange {
         //         "time":"1673899278514"
         //     }
         //
-        const timestamp = this.safeInteger(ticker, 'closeTime');
+        const timestamp = this.safeInteger2(ticker, 'closeTime', 'time');
         let marketType = undefined;
         if (('time' in ticker)) {
             marketType = 'contract';
@@ -3961,6 +3993,8 @@ export default class binance extends Exchange {
             'average': undefined,
             'baseVolume': baseVolume,
             'quoteVolume': quoteVolume,
+            'markPrice': this.safeString(ticker, 'markPrice'),
+            'indexPrice': this.safeString(ticker, 'indexPrice'),
             'info': ticker,
         }, market);
     }
@@ -4220,6 +4254,73 @@ export default class binance extends Exchange {
         }
         else {
             throw new NotSupported(this.id + ' fetchTickers() does not support ' + type + ' markets yet');
+        }
+        return this.parseTickers(response, symbols);
+    }
+    async fetchMarkPrice(symbol, params = {}) {
+        /**
+         * @method
+         * @name binance#fetchMarkPrice
+         * @description fetches mark price for the market
+         * @see https://binance-docs.github.io/apidocs/futures/en/#mark-price
+         * @see https://binance-docs.github.io/apidocs/delivery/en/#index-price-and-mark-price
+         * @param {string} symbol unified symbol of the market to fetch the ticker for
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {string} [params.subType] "linear" or "inverse"
+         * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        let type = undefined;
+        [type, params] = this.handleMarketTypeAndParams('fetchMarkPrice', market, params, 'swap');
+        let subType = undefined;
+        [subType, params] = this.handleSubTypeAndParams('fetchMarkPrice', market, params, 'linear');
+        const request = {
+            'symbol': market['id'],
+        };
+        let response = undefined;
+        if (this.isLinear(type, subType)) {
+            response = await this.fapiPublicGetPremiumIndex(this.extend(request, params));
+        }
+        else if (this.isInverse(type, subType)) {
+            response = await this.dapiPublicGetPremiumIndex(this.extend(request, params));
+        }
+        else {
+            throw new NotSupported(this.id + ' fetchMarkPrice() does not support ' + type + ' markets yet');
+        }
+        if (Array.isArray(response)) {
+            return this.parseTicker(this.safeDict(response, 0, {}), market);
+        }
+        return this.parseTicker(response, market);
+    }
+    async fetchMarkPrices(symbols = undefined, params = {}) {
+        /**
+         * @method
+         * @name binance#fetchMarkPrices
+         * @description fetches mark prices for multiple markets
+         * @see https://binance-docs.github.io/apidocs/futures/en/#mark-price
+         * @see https://binance-docs.github.io/apidocs/delivery/en/#index-price-and-mark-price
+         * @param {string[]} [symbols] unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {string} [params.subType] "linear" or "inverse"
+         * @returns {object} a dictionary of [ticker structures]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+         */
+        await this.loadMarkets();
+        symbols = this.marketSymbols(symbols, undefined, true, true, true);
+        const market = this.getMarketFromSymbols(symbols);
+        let type = undefined;
+        [type, params] = this.handleMarketTypeAndParams('fetchMarkPrices', market, params, 'swap');
+        let subType = undefined;
+        [subType, params] = this.handleSubTypeAndParams('fetchMarkPrices', market, params, 'linear');
+        let response = undefined;
+        if (this.isLinear(type, subType)) {
+            response = await this.fapiPublicGetPremiumIndex(params);
+        }
+        else if (this.isInverse(type, subType)) {
+            response = await this.dapiPublicGetPremiumIndex(params);
+        }
+        else {
+            throw new NotSupported(this.id + ' fetchMarkPrices() does not support ' + type + ' markets yet');
         }
         return this.parseTickers(response, symbols);
     }
@@ -6189,14 +6290,28 @@ export default class binance extends Exchange {
                 request['quantity'] = this.parseToNumeric(amount);
             }
             else {
-                request['quantity'] = this.amountToPrecision(symbol, amount);
+                const marketAmountPrecision = this.safeString(market['precision'], 'amount');
+                const isPrecisionAvailable = (marketAmountPrecision !== undefined);
+                if (isPrecisionAvailable) {
+                    request['quantity'] = this.amountToPrecision(symbol, amount);
+                }
+                else {
+                    request['quantity'] = this.parseToNumeric(amount); // some options don't have the precision available
+                }
             }
         }
         if (priceIsRequired && !isPriceMatch) {
             if (price === undefined) {
                 throw new InvalidOrder(this.id + ' createOrder() requires a price argument for a ' + type + ' order');
             }
-            request['price'] = this.priceToPrecision(symbol, price);
+            const pricePrecision = this.safeString(market['precision'], 'price');
+            const isPricePrecisionAvailable = (pricePrecision !== undefined);
+            if (isPricePrecisionAvailable) {
+                request['price'] = this.priceToPrecision(symbol, price);
+            }
+            else {
+                request['price'] = this.parseToNumeric(price); // some options don't have the precision available
+            }
         }
         if (stopPriceIsRequired) {
             if (market['contract']) {
@@ -8673,8 +8788,27 @@ export default class binance extends Exchange {
         //         }
         //     }
         //
+        return this.parseDepositAddress(response, currency);
+    }
+    parseDepositAddress(response, currency = undefined) {
+        //
+        //     {
+        //         "currency": "XRP",
+        //         "address": "rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh",
+        //         "tag": "108618262",
+        //         "info": {
+        //             "coin": "XRP",
+        //             "address": "rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh",
+        //             "tag": "108618262",
+        //             "url": "https://bithomp.com/explorer/rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh"
+        //         }
+        //     }
+        //
+        const info = this.safeDict(response, 'info', {});
+        const url = this.safeString(info, 'url');
         const address = this.safeString(response, 'address');
-        const url = this.safeString(response, 'url');
+        const currencyId = this.safeString(response, 'currency');
+        const code = this.safeCurrencyCode(currencyId, currency);
         let impliedNetwork = undefined;
         if (url !== undefined) {
             const reverseNetworks = this.safeDict(this.options, 'reverseNetworks', {});
@@ -8702,11 +8836,11 @@ export default class binance extends Exchange {
         }
         this.checkAddress(address);
         return {
+            'info': response,
             'currency': code,
+            'network': impliedNetwork,
             'address': address,
             'tag': tag,
-            'network': impliedNetwork,
-            'info': response,
         };
     }
     async fetchTransactionFees(codes = undefined, params = {}) {
@@ -9456,16 +9590,28 @@ export default class binance extends Exchange {
     parseFundingRate(contract, market = undefined) {
         // ensure it matches with https://www.binance.com/en/futures/funding-history/0
         //
-        //   {
-        //     "symbol": "BTCUSDT",
-        //     "markPrice": "45802.81129892",
-        //     "indexPrice": "45745.47701915",
-        //     "estimatedSettlePrice": "45133.91753671",
-        //     "lastFundingRate": "0.00063521",
-        //     "interestRate": "0.00010000",
-        //     "nextFundingTime": "1621267200000",
-        //     "time": "1621252344001"
-        //  }
+        // fetchFundingRate, fetchFundingRates
+        //
+        //     {
+        //         "symbol": "BTCUSDT",
+        //         "markPrice": "45802.81129892",
+        //         "indexPrice": "45745.47701915",
+        //         "estimatedSettlePrice": "45133.91753671",
+        //         "lastFundingRate": "0.00063521",
+        //         "interestRate": "0.00010000",
+        //         "nextFundingTime": "1621267200000",
+        //         "time": "1621252344001"
+        //     }
+        //
+        // fetchFundingInterval, fetchFundingIntervals
+        //
+        //     {
+        //         "symbol": "BLZUSDT",
+        //         "adjustedFundingRateCap": "0.03000000",
+        //         "adjustedFundingRateFloor": "-0.03000000",
+        //         "fundingIntervalHours": 4,
+        //         "disclaimer": false
+        //     }
         //
         const timestamp = this.safeInteger(contract, 'time');
         const marketId = this.safeString(contract, 'symbol');
@@ -9476,6 +9622,11 @@ export default class binance extends Exchange {
         const estimatedSettlePrice = this.safeNumber(contract, 'estimatedSettlePrice');
         const fundingRate = this.safeNumber(contract, 'lastFundingRate');
         const fundingTime = this.safeInteger(contract, 'nextFundingTime');
+        const interval = this.safeString(contract, 'fundingIntervalHours');
+        let intervalString = undefined;
+        if (interval !== undefined) {
+            intervalString = interval + 'h';
+        }
         return {
             'info': contract,
             'symbol': symbol,
@@ -9494,7 +9645,7 @@ export default class binance extends Exchange {
             'previousFundingRate': undefined,
             'previousFundingTimestamp': undefined,
             'previousFundingDatetime': undefined,
-            'interval': undefined,
+            'interval': intervalString,
         };
     }
     parseAccountPositions(account, filterClosed = false) {
@@ -13634,5 +13785,50 @@ export default class binance extends Exchange {
             'price': undefined,
             'fee': undefined,
         };
+    }
+    async fetchFundingIntervals(symbols = undefined, params = {}) {
+        /**
+         * @method
+         * @name binance#fetchFundingIntervals
+         * @description fetch the funding rate interval for multiple markets
+         * @see https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Get-Funding-Info
+         * @see https://developers.binance.com/docs/derivatives/coin-margined-futures/market-data/Get-Funding-Info
+         * @param {string[]} [symbols] list of unified market symbols
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {string} [params.subType] "linear" or "inverse"
+         * @returns {object[]} a list of [funding rate structures]{@link https://docs.ccxt.com/#/?id=funding-rate-structure}
+         */
+        await this.loadMarkets();
+        let market = undefined;
+        if (symbols !== undefined) {
+            symbols = this.marketSymbols(symbols);
+            market = this.market(symbols[0]);
+        }
+        const type = 'swap';
+        let subType = undefined;
+        [subType, params] = this.handleSubTypeAndParams('fetchFundingIntervals', market, params, 'linear');
+        let response = undefined;
+        if (this.isLinear(type, subType)) {
+            response = await this.fapiPublicGetFundingInfo(params);
+        }
+        else if (this.isInverse(type, subType)) {
+            response = await this.dapiPublicGetFundingInfo(params);
+        }
+        else {
+            throw new NotSupported(this.id + ' fetchFundingIntervals() supports linear and inverse swap contracts only');
+        }
+        //
+        //     [
+        //         {
+        //             "symbol": "BLZUSDT",
+        //             "adjustedFundingRateCap": "0.03000000",
+        //             "adjustedFundingRateFloor": "-0.03000000",
+        //             "fundingIntervalHours": 4,
+        //             "disclaimer": false
+        //         },
+        //     ]
+        //
+        const result = this.parseFundingRates(response, market);
+        return this.filterByArray(result, 'symbol', symbols);
     }
 }
