@@ -425,6 +425,7 @@ class Exchange {
         'paradex',
         'paymium',
         'phemex',
+        'pionex',
         'poloniex',
         'poloniexfutures',
         'probit',

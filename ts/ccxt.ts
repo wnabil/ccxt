@@ -137,6 +137,7 @@ import p2b from  './src/p2b.js'
 import paradex from  './src/paradex.js'
 import paymium from  './src/paymium.js'
 import phemex from  './src/phemex.js'
+import pionex from  './src/pionex.js'
 import poloniex from  './src/poloniex.js'
 import poloniexfutures from  './src/poloniexfutures.js'
 import probit from  './src/probit.js'
@@ -182,6 +183,7 @@ import blofinPro from  './src/pro/blofin.js'
 import bybitPro from  './src/pro/bybit.js'
 import cexPro from  './src/pro/cex.js'
 import coinbasePro from  './src/pro/coinbase.js'
+import coinbaseadvancedPro from  './src/pro/coinbaseadvanced.js'
 import coinbaseexchangePro from  './src/pro/coinbaseexchange.js'
 import coinbaseinternationalPro from  './src/pro/coinbaseinternational.js'
 import coincheckPro from  './src/pro/coincheck.js'
@@ -321,6 +323,7 @@ const exchanges = {
     'paradex':                paradex,
     'paymium':                paymium,
     'phemex':                 phemex,
+    'pionex':                 pionex,
     'poloniex':               poloniex,
     'poloniexfutures':        poloniexfutures,
     'probit':                 probit,
@@ -366,6 +369,7 @@ const pro = {
     'bybit':                  bybitPro,
     'cex':                    cexPro,
     'coinbase':               coinbasePro,
+    'coinbaseadvanced':       coinbaseadvancedPro,
     'coinbaseexchange':       coinbaseexchangePro,
     'coinbaseinternational':  coinbaseinternationalPro,
     'coincheck':              coincheckPro,
@@ -643,6 +647,7 @@ export {
     paradex,
     paymium,
     phemex,
+    pionex,
     poloniex,
     poloniexfutures,
     probit,

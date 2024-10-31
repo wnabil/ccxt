@@ -1,8 +1,8 @@
 //  ---------------------------------------------------------------------------
 
 import Exchange from './abstract/pionex.js';
-import { BadRequest, AuthenticationError, InsufficientFunds, OrderNotFound, DDoSProtection, DuplicateOrderId, PermissionDenied, BadSymbol, InvalidAddress, ArgumentsRequired } from './base/errors.js';
-import { TICK_SIZE } from './base/functions/number.js';
+import { BadRequest, AuthenticationError, InsufficientFunds, OrderNotFound, DDoSProtection, DuplicateOrderId, PermissionDenied, BadSymbol, InvalidAddress, ArgumentsRequired, ExchangeError } from './base/errors.js';
+import { DECIMAL_PLACES } from './base/functions/number.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
 import type { Balances, Dict, Int, Market, MarketType, Num, OHLCV, Order, OrderBook, OrderSide, OrderType, OrderRequest, Str, Strings, Ticker, Tickers, Trade, int } from './base/types.js';
 
@@ -85,8 +85,8 @@ export default class pionex extends Exchange {
                 'fetchPositionsHistory': false,
                 'fetchPositionsRisk': false,
                 'fetchPremiumIndexOHLCV': false,
-                'fetchTicker': false,
-                'fetchTickers': true,
+                'fetchTicker': true,
+                'fetchTickers': false,
                 'fetchTrades': true,
                 'fetchTradingLimits': false,
                 'fetchTransactionFee': false,
@@ -164,7 +164,7 @@ export default class pionex extends Exchange {
                     'maker': this.parseNumber ('0.0005'),
                 },
             },
-            'precisionMode': TICK_SIZE,
+            'precisionMode': DECIMAL_PLACES,
             'exceptions': {
                 'APIKEY_LOST': ArgumentsRequired,
                 'SIGNATURE_LOST': ArgumentsRequired,
@@ -184,6 +184,7 @@ export default class pionex extends Exchange {
                 'TRADE_OPEN_ORDER_EXCEED_LIMIT': DDoSProtection,
                 'TRADE_OPERATION_DENIED': PermissionDenied,
                 'TRADE_ORDER_NOT_FOUND': OrderNotFound,
+                'MARKET_INVALID_SYMBOL': BadSymbol,
             },
         });
     }
@@ -250,9 +251,10 @@ export default class pionex extends Exchange {
         const quoteId = this.safeString (market, 'quoteCurrency');
         const type = this.safeStringLower (market, 'type');
         const spot = type === 'spot';
+        const id = baseId + '/' + quoteId;
         return {
-            'id': baseId + '/' + quoteId,
-            'symbol': this.safeString (market, 'symbol'),
+            'symbol': id,
+            'id': id,
             'spot': spot,
             'type': type as MarketType,
             'base': baseId,
@@ -307,7 +309,7 @@ export default class pionex extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
         };
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 500); // default 100, max 500
@@ -371,7 +373,7 @@ export default class pionex extends Exchange {
             'info': trade,
             'id': this.safeString2 (trade, 'tradeId', 'id'),
             'order': this.safeString (trade, 'orderId'),
-            'symbol': this.safeString (trade, 'symbol'),
+            'symbol': this.safeString (trade, 'symbol').replace ('_', '/'),
             'side': this.safeStringLower (trade, 'side'),
             'type': this.safeStringLower (trade, 'type'),
             'takerOrMaker': this.safeStringLower (trade, 'role'),
@@ -402,7 +404,7 @@ export default class pionex extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
         };
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 1000); // default 20, max 1000
@@ -430,7 +432,7 @@ export default class pionex extends Exchange {
         // "timestamp": 1566691672311
         // }
         const orderBook = this.safeDict (response, 'data');
-        return this.parseOrderBook (orderBook, market['symbol'], undefined, 'bids', 'asks');
+        return this.parseOrderBook (orderBook, market['id'], undefined, 'bids', 'asks');
     }
 
     async fetchOHLCV (symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params = {}): Promise<OHLCV[]> {
@@ -449,17 +451,21 @@ export default class pionex extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
         };
         if (timeframe !== undefined) {
-            request['timeframe'] = this.timeframes[timeframe];
+            request['interval'] = this.timeframes[timeframe];
         }
         if (limit !== undefined) {
             request['limit'] = Math.min (limit, 500); // default 100, max 500
         }
+        if (since !== undefined) {
+            const duration = this.parseTimeframe (timeframe);
+            request['endTime'] = Math.min (this.sum (since, duration * limit * 1000), this.milliseconds ());
+        }
         const response = await this.publicGetMarketKlines (this.extend (request, params));
         const data = this.safeDict (response, 'data', {});
-        const klines = this.safeValue (data, 'klines', []);
+        const klines = this.safeList (data, 'klines', []);
         // {
         // "result": true,
         // "data": {
@@ -498,7 +504,7 @@ export default class pionex extends Exchange {
         ];
     }
 
-    async fetchTickers (symbols: Strings = undefined, params = {}): Promise<Tickers> {
+    async fetchTickers (symbols: Strings = undefined, params = { }): Promise<Tickers> {
         /**
          * @method
          * @name pionex#fetchTickers
@@ -510,8 +516,105 @@ export default class pionex extends Exchange {
          * @returns {object} a dictionary of ticker structures]
          */
         await this.loadMarkets ();
+        if (params['type'] === undefined) {
+            params['type'] = 'SPOT';
+        }
+        const request = params;
+        const response = await this.publicGetMarketTickers (request);
+        // {
+        // "data": {
+        //     "tickers": [
+        //     {
+        //         "symbol": "BTC_USDT",
+        //         "time": 1545291675000,
+        //         "open": "7962.62",
+        //         "close": "7952.32",
+        //         "high": "7971.61",
+        //         "low": "7950.29",
+        //         "volume": "1.537",
+        //         "amount": "12032.56",
+        //         "count": 271585
+        //     },
+        //     {
+        //         "symbol": "ETH_USDT",
+        //         "time": 1545291675000,
+        //         "open": "1963.62",
+        //         "close": "1852.22",
+        //         "high": "1971.11",
+        //         "low": "1850.23",
+        //         "volume": "100.532",
+        //         "amount": "112012.51",
+        //         "count": 432211
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const response2 = await this.publicGetMarketBookTickers (request);
+        // {
+        // "data": {
+        //     "tickers": [
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict (response, 'data', {});
+        const data2 = this.safeDict (response2, 'data', {});
+        let tickers = this.safeList (data, 'tickers', []);
+        let tickers2 = this.safeList (data2, 'tickers', []);
+        const symbolsChanged = [];
+        if (symbols === undefined) {
+            symbols = [];
+            for (let i = 0; i < this.symbols.length; i++) {
+                const symbol = this.symbols[i];
+                symbols[i] = symbol.replace ('/', '_');
+                symbolsChanged.push (this.marketApiSymbol (symbols[i]));
+            }
+        }
+        tickers = this.filterByArray (tickers, 'symbol', symbolsChanged);
+        tickers2 = this.filterByArray (tickers2, 'symbol', symbolsChanged);
+        let tickersFinal = [];
+        const unmatchedTickers = [];
+        for (let i = 0; i < tickers.length; i++) {
+            const ticker = tickers[i];
+            ticker['symbol'] = ticker['symbol'].replace ('_', '/');
+            for (let j = 0; j < tickers2.length; j++) {
+                const ticker2 = tickers2[j];
+                ticker2['symbol'] = ticker2['symbol'].replace ('_', '/');
+                if (ticker2['symbol'] === ticker['symbol']) {
+                    tickersFinal.push (this.extend (ticker, ticker2));
+                } else {
+                    unmatchedTickers[i] = ticker;
+                    tickersFinal.push (ticker2);
+                }
+            }
+        }
+        for (let i = 0; i < unmatchedTickers.length; i++) {
+            const ticker = unmatchedTickers[i];
+            tickersFinal.push (ticker);
+        }
+        tickersFinal = this.filterByArray (tickersFinal, 'symbol', this.symbols);
+        return this.parseTickers (tickersFinal, this.symbols);
+    }
+
+    async fetchTicker (symbol: string, params = {}): Promise<Ticker> {
+        /**
+         * @method
+         * @name pionex#fetchTicker
+         * @description fetches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-24hr-ticker
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-book-ticker
+         * @param {string} symbol unified symbol of the market to fetch the ticker for
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+         */
+        await this.loadMarkets ();
+        const market = this.market (symbol);
         const request: Dict = {
-            'type': 'SPOT',
+            'symbol': this.marketApiSymbol (market['id']),
+            'type': this.safeStringUpper (market, 'type'),
         };
         const response = await this.publicGetMarketTickers (this.extend (request, params));
         // {
@@ -557,21 +660,7 @@ export default class pionex extends Exchange {
         const data2 = this.safeDict (response2, 'data', {});
         const tickers = this.safeList (data, 'tickers', []);
         const tickers2 = this.safeList (data2, 'tickers', []);
-        const tickersFinal = [];
-        const keys = this.keys (tickers);
-        for (let i = 0; i < keys.length; i++) {
-            const tk = keys[i];
-            const ticker = tickers[tk];
-            const keys2 = this.keys (tickers);
-            for (let j = 0; j < keys2.length; j++) {
-                const tk2 = keys[j];
-                const ticker2 = tickers2[tk2];
-                if (ticker2['symbol'] === ticker['symbol']) {
-                    tickersFinal.push (this.extend (ticker, ticker2));
-                }
-            }
-        }
-        return this.parseTickers (tickersFinal, symbols);
+        return this.parseTicker (this.extend (tickers[0], tickers2[0]), market) as Ticker;
     }
 
     parseTicker (ticker: Dict, market: Market = undefined): Ticker {
@@ -588,7 +677,7 @@ export default class pionex extends Exchange {
         // }
         const timestamp = this.safeNumber (ticker, 'time');
         return this.safeTicker ({
-            'symbol': this.safeString (ticker, 'symbol'),
+            'symbol': this.safeString (ticker, 'symbol').replace ('_', '/'),
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'high': this.safeNumber (ticker, 'high'),
@@ -698,7 +787,7 @@ export default class pionex extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
         };
         if (limit === undefined) {
             limit = 50;  // max = 200
@@ -755,7 +844,7 @@ export default class pionex extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
         };
         if (limit === undefined) {
             limit = 50;  // max = 200
@@ -881,7 +970,7 @@ export default class pionex extends Exchange {
             'datetime': this.iso8601 (timestamp),
             'lastTradeTimestamp': this.safeNumber (order, 'updateTime'),
             'status': this.safeStringLower (order, 'status'),
-            'symbol': this.safeString (order, 'symbol'),
+            'symbol': this.safeString (order, 'symbol').replace ('_', '/'),
             'type': this.safeStringLower (order, 'type'),
             'timeInForce': undefined,
             'postOnly': this.safeBool (order, 'IOC'),
@@ -918,7 +1007,7 @@ export default class pionex extends Exchange {
         await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': symbol,
+            'symbol': this.marketApiSymbol (market['id']),
         };
         const response = this.privateGetTradeFills (this.extend (request, params));
         // {
@@ -1025,10 +1114,10 @@ export default class pionex extends Exchange {
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
-        this.loadMarkets ();
+        await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
             'orderId': id,
         };
         this.privateDeleteTradeOrder (this.extend (request, params));
@@ -1036,7 +1125,7 @@ export default class pionex extends Exchange {
         // "result": true,
         // "timestamp": 1566691672311
         // }
-        const order = this.safeOrder ({ 'id': id, 'symbol': market['symbol'], 'info': {}}, market);
+        const order = this.safeOrder ({ 'id': id, 'symbol': market['id'], 'info': {}}, market);
         return order;
     }
 
@@ -1050,17 +1139,17 @@ export default class pionex extends Exchange {
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
-        this.loadMarkets ();
+        await this.loadMarkets ();
         const market = this.market (symbol);
         const request: Dict = {
-            'symbol': symbol,
+            'symbol': this.marketApiSymbol (market['id']),
         };
         this.privateDeleteTradeAllOrders (this.extend (request, params));
         //  {
         //  "result": true,
         //  "timestamp": 1566691672311
         //  }
-        const order = this.safeOrder ({ 'symbol': market['symbol'], 'info': {}}, market);
+        const order = this.safeOrder ({ 'symbol': market['id'], 'info': {}}, market);
         return [ order ];
     }
 
@@ -1078,11 +1167,11 @@ export default class pionex extends Exchange {
          * @param {object} [params] extra parameters specific to the exchange API endpoint
          * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
-        this.loadMarkets ();
+        await this.loadMarkets ();
         const market = this.market (symbol);
         const clientOrderId = this.safeString2 (params, 'client_order_id', 'clientOrderId', this.uuid ());
         const request: Dict = {
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
             'side': side.toUpperCase (),
             'type': type.toUpperCase (),
             'amount': this.amountToPrecision (symbol, amount),
@@ -1132,9 +1221,8 @@ export default class pionex extends Exchange {
         }
         const firstOrder = ordersRequests[0];
         const firstSymbol = this.safeString (firstOrder, 'symbol');
-        const market = this.market (firstSymbol);
         const request: Dict = {
-            'symbol': market[firstSymbol],
+            'symbol': firstSymbol,
             'orders': ordersRequests,
         };
         const response = this.privatePostTradeMassOrder (this.extend (request, params));
@@ -1182,20 +1270,10 @@ export default class pionex extends Exchange {
         if (response === undefined) {
             return undefined; // fallback to the default error handler
         }
-        const feedback = this.id + ' ' + body;
-        const status = this.safeNumber (response, 'status', 200);
-        if (status > 200) {
-            const statusStr = status.toString ();
-            this.throwExactlyMatchedException (
-                this.exceptions['exact'],
-                statusStr,
-                feedback
-            );
-            this.throwBroadlyMatchedException (
-                this.exceptions['broad'],
-                statusStr,
-                feedback
-            );
+        if (!this.safeBool (response, 'result', false)) {
+            const feedback = this.id + ' ' + this.json (response);
+            this.throwExactlyMatchedException (this.exceptions, this.safeString (response, 'code'), feedback);
+            throw new ExchangeError (feedback);
         }
         return undefined;
     }
@@ -1207,11 +1285,15 @@ export default class pionex extends Exchange {
         const request: Dict = {
             'clientOrderId': clientOrderId,
             'side': side,
-            'symbol': market['symbol'],
+            'symbol': this.marketApiSymbol (market['id']),
             'type': 'LIMIT',  // Only support LIMIT.
             'size': this.amountToPrecision (symbol, amount),
             'price': price,
         };
         return this.extend (request, params);
+    }
+
+    private marketApiSymbol (symbol: Str) {
+        return symbol.replace ('/', '_');
     }
 }

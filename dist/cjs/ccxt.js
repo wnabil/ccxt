@@ -103,6 +103,7 @@ var p2b = require('./src/p2b.js');
 var paradex = require('./src/paradex.js');
 var paymium = require('./src/paymium.js');
 var phemex = require('./src/phemex.js');
+var pionex = require('./src/pionex.js');
 var poloniex = require('./src/poloniex.js');
 var poloniexfutures = require('./src/poloniexfutures.js');
 var probit = require('./src/probit.js');
@@ -145,6 +146,7 @@ var blofin$1 = require('./src/pro/blofin.js');
 var bybit$1 = require('./src/pro/bybit.js');
 var cex$1 = require('./src/pro/cex.js');
 var coinbase$1 = require('./src/pro/coinbase.js');
+var coinbaseadvanced$1 = require('./src/pro/coinbaseadvanced.js');
 var coinbaseexchange$1 = require('./src/pro/coinbaseexchange.js');
 var coinbaseinternational$1 = require('./src/pro/coinbaseinternational.js');
 var coincheck$1 = require('./src/pro/coincheck.js');
@@ -288,6 +290,7 @@ const exchanges = {
     'paradex': paradex,
     'paymium': paymium,
     'phemex': phemex,
+    'pionex': pionex,
     'poloniex': poloniex,
     'poloniexfutures': poloniexfutures,
     'probit': probit,
@@ -332,6 +335,7 @@ const pro = {
     'bybit': bybit$1,
     'cex': cex$1,
     'coinbase': coinbase$1,
+    'coinbaseadvanced': coinbaseadvanced$1,
     'coinbaseexchange': coinbaseexchange$1,
     'coinbaseinternational': coinbaseinternational$1,
     'coincheck': coincheck$1,
@@ -520,6 +524,7 @@ exports.p2b = p2b;
 exports.paradex = paradex;
 exports.paymium = paymium;
 exports.phemex = phemex;
+exports.pionex = pionex;
 exports.poloniex = poloniex;
 exports.poloniexfutures = poloniexfutures;
 exports.probit = probit;

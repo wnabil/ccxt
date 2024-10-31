@@ -1298,6 +1298,22 @@ class Exchange extends _base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchang
 
 /***/ }),
 
+/***/ 9990:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2961);
+// -------------------------------------------------------------------------------
+
+class Exchange extends _base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchange */ .k {
+}
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (Exchange);
+
+
+/***/ }),
+
 /***/ 7733:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
@@ -202782,16 +202798,16 @@ class lbank extends _abstract_lbank_js__WEBPACK_IMPORTED_MODULE_0__/* ["default"
         }
         if (since === undefined) {
             const duration = this.parseTimeframe(timeframe);
-            since = this.milliseconds() - duration * 1000 * limit;
+            since = this.milliseconds() - (duration * 1000 * limit);
         }
         const request = {
             'symbol': market['id'],
             'type': this.safeString(this.timeframes, timeframe, timeframe),
             'time': this.parseToInt(since / 1000),
-            'size': limit, // max 2000
+            'size': Math.min(limit + 1, 2000), // max 2000
         };
         const response = await this.spotPublicGetKline(this.extend(request, params));
-        const ohlcvs = this.safeValue(response, 'data', []);
+        const ohlcvs = this.safeList(response, 'data', []);
         //
         //
         // [
@@ -239783,6 +239799,7 @@ class phemex extends _abstract_phemex_js__WEBPACK_IMPORTED_MODULE_0__/* ["defaul
                 'fetchMarkOHLCV': false,
                 'fetchMyTrades': true,
                 'fetchOHLCV': true,
+                'fetchOpenInterest': true,
                 'fetchOpenOrders': true,
                 'fetchOrder': true,
                 'fetchOrderBook': true,
@@ -244566,6 +244583,80 @@ class phemex extends _abstract_phemex_js__WEBPACK_IMPORTED_MODULE_0__/* ["defaul
         const data = this.safeDict(response, 'data', {});
         return this.parseTransaction(data, currency);
     }
+    async fetchOpenInterest(symbol, params = {}) {
+        /**
+         * @method
+         * @name phemex#fetchOpenInterest
+         * @description retrieves the open interest of a trading pair
+         * @see https://phemex-docs.github.io/#query-24-hours-ticker
+         * @param {string} symbol unified CCXT market symbol
+         * @param {object} [params] exchange specific parameters
+         * @returns {object} an open interest structure{@link https://docs.ccxt.com/#/?id=open-interest-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        if (!market['contract']) {
+            throw new _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadRequest(this.id + ' fetchOpenInterest is only supported for contract markets.');
+        }
+        const request = {
+            'symbol': market['id'],
+        };
+        const response = await this.v2GetMdV2Ticker24hr(this.extend(request, params));
+        //
+        //    {
+        //        error: null,
+        //        id: '0',
+        //        result: {
+        //          closeRp: '67550.1',
+        //          fundingRateRr: '0.0001',
+        //          highRp: '68400',
+        //          indexPriceRp: '67567.15389794',
+        //          lowRp: '66096.4',
+        //          markPriceRp: '67550.1',
+        //          openInterestRv: '1848.1144186',
+        //          openRp: '66330',
+        //          predFundingRateRr: '0.0001',
+        //          symbol: 'BTCUSDT',
+        //          timestamp: '1729114315443343001',
+        //          turnoverRv: '228863389.3237532',
+        //          volumeRq: '3388.5600312'
+        //        }
+        //    }
+        //
+        const result = this.safeDict(response, 'result');
+        return this.parseOpenInterest(result, market);
+    }
+    parseOpenInterest(interest, market = undefined) {
+        //
+        //    {
+        //        closeRp: '67550.1',
+        //        fundingRateRr: '0.0001',
+        //        highRp: '68400',
+        //        indexPriceRp: '67567.15389794',
+        //        lowRp: '66096.4',
+        //        markPriceRp: '67550.1',
+        //        openInterestRv: '1848.1144186',
+        //        openRp: '66330',
+        //        predFundingRateRr: '0.0001',
+        //        symbol: 'BTCUSDT',
+        //        timestamp: '1729114315443343001',
+        //        turnoverRv: '228863389.3237532',
+        //        volumeRq: '3388.5600312'
+        //    }
+        //
+        const timestamp = this.safeInteger(interest, 'timestamp') / 1000000;
+        const id = this.safeString(interest, 'symbol');
+        return this.safeOpenInterest({
+            'info': interest,
+            'symbol': this.safeSymbol(id, market),
+            'baseVolume': this.safeString(interest, 'volumeRq'),
+            'quoteVolume': undefined,
+            'openInterestAmount': this.safeString(interest, 'openInterestRv'),
+            'openInterestValue': undefined,
+            'timestamp': timestamp,
+            'datetime': this.iso8601(timestamp),
+        }, market);
+    }
     handleErrors(httpCode, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (response === undefined) {
             return undefined; // fallback to default error handler
@@ -244586,6 +244677,1293 @@ class phemex extends _abstract_phemex_js__WEBPACK_IMPORTED_MODULE_0__/* ["defaul
             throw new _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.ExchangeError(feedback); // unknown message
         }
         return undefined;
+    }
+}
+
+
+/***/ }),
+
+/***/ 9439:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (/* binding */ pionex)
+/* harmony export */ });
+/* harmony import */ var _abstract_pionex_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(9990);
+/* harmony import */ var _base_errors_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(2079);
+/* harmony import */ var _base_functions_number_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1579);
+/* harmony import */ var _static_dependencies_noble_hashes_sha256_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4852);
+//  ---------------------------------------------------------------------------
+
+
+
+
+//  ---------------------------------------------------------------------------
+/**
+ * @class ace
+ * @augments Exchange
+ */
+class pionex extends _abstract_pionex_js__WEBPACK_IMPORTED_MODULE_0__/* ["default"] */ .A {
+    describe() {
+        return this.deepExtend(super.describe(), {
+            'id': 'pionex',
+            'name': 'Pionex',
+            'countries': ['EU'],
+            'rateLimit': 100,
+            'version': 'v1',
+            'has': {
+                'CORS': undefined,
+                'spot': true,
+                'margin': undefined,
+                'swap': undefined,
+                'future': undefined,
+                'option': undefined,
+                'cancelAllOrders': true,
+                'cancelOrder': true,
+                'cancelOrders': false,
+                'closeAllPositions': false,
+                'closePosition': false,
+                'createDepositAddress': false,
+                'createMarketOrder': true,
+                'createOrder': true,
+                'createOrders': false,
+                'createPostOnlyOrder': true,
+                'createReduceOnlyOrder': false,
+                'createStopLimitOrder': false,
+                'createStopMarketOrder': false,
+                'createStopOrder': false,
+                'fetchAccounts': false,
+                'fetchBalance': true,
+                'fetchBorrowInterest': false,
+                'fetchBorrowRateHistory': false,
+                'fetchClosedOrders': false,
+                'fetchCrossBorrowRate': false,
+                'fetchCrossBorrowRates': false,
+                'fetchDeposit': false,
+                'fetchDepositAddress': false,
+                'fetchDepositAddresses': false,
+                'fetchDepositAddressesByNetwork': false,
+                'fetchDeposits': false,
+                'fetchDepositsWithdrawals': false,
+                'fetchFundingHistory': false,
+                'fetchFundingRate': false,
+                'fetchFundingRateHistory': false,
+                'fetchFundingRates': false,
+                'fetchIndexOHLCV': false,
+                'fetchIsolatedBorrowRate': false,
+                'fetchIsolatedBorrowRates': false,
+                'fetchLedger': false,
+                'fetchLedgerEntry': false,
+                'fetchLeverageTiers': false,
+                'fetchMarketLeverageTiers': false,
+                'fetchMarkets': true,
+                'fetchMarkOHLCV': false,
+                'fetchMyTrades': true,
+                'fetchOHLCV': false,
+                'fetchOpenInterest': false,
+                'fetchOpenInterestHistory': false,
+                'fetchOpenOrders': true,
+                'fetchOrder': true,
+                'fetchOrderBook': true,
+                'fetchOrderBooks': true,
+                'fetchOrders': true,
+                'fetchOrderTrades': true,
+                'fetchPosition': false,
+                'fetchPositionHistory': false,
+                'fetchPositionMode': false,
+                'fetchPositions': false,
+                'fetchPositionsForSymbol': false,
+                'fetchPositionsHistory': false,
+                'fetchPositionsRisk': false,
+                'fetchPremiumIndexOHLCV': false,
+                'fetchTicker': true,
+                'fetchTickers': false,
+                'fetchTrades': true,
+                'fetchTradingLimits': false,
+                'fetchTransactionFee': false,
+                'fetchTransactionFees': false,
+                'fetchTransactions': false,
+                'fetchTransfers': false,
+                'fetchWithdrawAddresses': false,
+                'fetchWithdrawal': false,
+                'fetchWithdrawals': false,
+                'reduceMargin': false,
+                'setLeverage': false,
+                'setMargin': false,
+                'setMarginMode': false,
+                'setPositionMode': false,
+                'signIn': false,
+                'transfer': false,
+                'withdraw': false,
+            },
+            'timeframes': {
+                '1m': '1M',
+                '5m': '5M',
+                '15m': '15M',
+                '30m': '30M',
+                '1h': '60M',
+                '4h': '4H',
+                '8h': '8H',
+                '12h': '12H',
+                '1d': '1D',
+            },
+            'urls': {
+                'api': {
+                    'public': 'https://api.pionex.com',
+                    'private': 'https://api.pionex.com',
+                },
+                'www': 'https://www.pionex.com/',
+                'doc': 'https://pionex-doc.gitbook.io/apidocs',
+                'fees': 'https://www.pionex.com/en/fees',
+            },
+            'api': {
+                'public': {
+                    'get': {
+                        'common/symbols': 5,
+                        'market/trades': 1,
+                        'market/depth': 1,
+                        'market/tickers': 1,
+                        'market/bookTickers': 1,
+                        'market/klines': 1,
+                    },
+                },
+                'private': {
+                    'get': {
+                        'account/balances': 1,
+                        'trade/order': 1,
+                        'trade/orderByClientOrderId': 1,
+                        'trade/openOrders': 5,
+                        'trade/allOrders': 5,
+                        'trade/fills': 5,
+                        'trade/fillsByOrderId': 5,
+                    },
+                    'post': {
+                        'trade/order': 1,
+                        'trade/massOrder': 1,
+                    },
+                    'delete': {
+                        'trade/order': 1,
+                        'trade/allOrders': 1,
+                    },
+                },
+            },
+            'fees': {
+                'trading': {
+                    'tierBased': false,
+                    'percentage': true,
+                    'taker': this.parseNumber('0.0005'),
+                    'maker': this.parseNumber('0.0005'),
+                },
+            },
+            'precisionMode': _base_functions_number_js__WEBPACK_IMPORTED_MODULE_1__/* .DECIMAL_PLACES */ .fv,
+            'exceptions': {
+                'APIKEY_LOST': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.ArgumentsRequired,
+                'SIGNATURE_LOST': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.ArgumentsRequired,
+                'IP_NOT_WHITELISTED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.InvalidAddress,
+                'INVALIE_APIKEY': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.AuthenticationError,
+                'INVALID_SIGNATURE': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.AuthenticationError,
+                'APIKEY_EXPIRED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.AuthenticationError,
+                'INVALID_TIMESTAMP': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadRequest,
+                'PERMISSION_DENIED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.PermissionDenied,
+                'TRADE_INVALID_SYMBOL': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadSymbol,
+                'TRADE_PARAMETER_ERROR': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadRequest,
+                'TRADE_NOT_ENOUGH_MONEY': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.InsufficientFunds,
+                'TRADE_PRICE_FILTER_DENIED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadRequest,
+                'TRADE_SIZE_FILTER_DENIED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadRequest,
+                'TRADE_AMOUNT_FILTER_DENIED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadRequest,
+                'TRADE_REPEAT_CLIENT_ORDER_ID': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.DuplicateOrderId,
+                'TRADE_OPEN_ORDER_EXCEED_LIMIT': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.DDoSProtection,
+                'TRADE_OPERATION_DENIED': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.PermissionDenied,
+                'TRADE_ORDER_NOT_FOUND': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.OrderNotFound,
+                'MARKET_INVALID_SYMBOL': _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.BadSymbol,
+            },
+        });
+    }
+    async fetchMarkets(params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchMarkets
+         * @description retrieves data on all markets for pionex
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/common/market-data
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object[]} an array of objects representing market data
+         */
+        const response = await this.publicGetCommonSymbols();
+        // {
+        //   "data": {
+        //     "symbols":[
+        //       {
+        //         "symbol": "BTC_USDT",
+        //         "type": "SPOT",
+        //         "baseCurrency": "BTC",
+        //         "quoteCurrency": "USDT",
+        //         "basePrecision": 6,
+        //         "quotePrecision": 2,
+        //         "amountPrecision": 8,
+        //         "minAmount": "10",
+        //         "minTradeSize": "0.000001",
+        //         "maxTradeSize": "1000",
+        //         "minTradeDumping": "0.000001",
+        //         "maxTradeDumping": "100",
+        //         "enable": true,
+        //         "buyCeiling": "1.1",
+        //         "sellFloor": "0.9"
+        //       }
+        //     ]
+        //   },
+        //   "result": true,
+        //   "timestamp": 1566676132311
+        // }
+        const data = this.safeValue(response, 'data', {});
+        const markets = this.safeValue(data, 'symbols', []);
+        return this.parseMarkets(markets);
+    }
+    parseMarket(market) {
+        //  {
+        //    "symbol": "BTC_USDT",
+        //    "type": "SPOT",
+        //    "baseCurrency": "BTC",
+        //    "quoteCurrency": "USDT",
+        //    "basePrecision": 6,
+        //    "quotePrecision": 2,
+        //    "amountPrecision": 8,
+        //    "minAmount": "10",
+        //    "minTradeSize": "0.000001",
+        //    "maxTradeSize": "1000",
+        //    "minTradeDumping": "0.000001",
+        //    "maxTradeDumping": "100",
+        //    "enable": true,
+        //    "buyCeiling": "1.1",
+        //    "sellFloor": "0.9"
+        //  }
+        const baseId = this.safeString(market, 'baseCurrency');
+        const quoteId = this.safeString(market, 'quoteCurrency');
+        const type = this.safeStringLower(market, 'type');
+        const spot = type === 'spot';
+        const id = baseId + '/' + quoteId;
+        return {
+            'symbol': id,
+            'id': id,
+            'spot': spot,
+            'type': type,
+            'base': baseId,
+            'quote': quoteId,
+            'baseId': baseId,
+            'quoteId': quoteId,
+            'active': this.safeBool(market, 'enable'),
+            'maker': 0.0005,
+            'taker': 0.0005,
+            'limits': {
+                'amount': {
+                    'min': this.safeNumber(market, 'minTradeSize'),
+                    'max': this.safeNumber(market, 'maxTradeSize'),
+                },
+            },
+            'precision': {
+                'amount': this.safeNumber(market, 'amountPrecision'),
+                'price': this.safeNumber(market, 'basePrecision'),
+                // 'qoute': this.safeNumber(market, 'quotePrecision'),
+            },
+            'info': market,
+            'contract': false,
+            'contractSize': undefined,
+            'created': undefined,
+            'expiry': undefined,
+            'expiryDatetime': undefined,
+            'future': !spot,
+            'inverse': undefined,
+            'linear': undefined,
+            'margin': false,
+            'swap': false,
+            'option': false,
+            'optionType': undefined,
+            'settle': undefined,
+            'settleId': undefined,
+            'strike': undefined,
+        };
+    }
+    async fetchTrades(symbol, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchTrades
+         * @description get the list of most recent trades for a particular symbol
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-trades
+         * @param {string} symbol unified symbol of the market to fetch trades for
+         * @param {int} [since] timestamp in ms of the earliest trade to fetch
+         * @param {int} [limit] the maximum amount of trades to fetch
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Trade[]} a list of trades
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        if (limit !== undefined) {
+            request['limit'] = Math.min(limit, 500); // default 100, max 500
+        }
+        const response = await this.publicGetMarketTrades(this.extend(request, params));
+        // {
+        //     "data": {
+        //     "trades": [
+        //         {
+        //         "symbol": "BTC_USDT",
+        //         "tradeId": "600848671",
+        //         "price": "7962.62",
+        //         "size": "0.0122",
+        //         "side": "BUY",
+        //         "timestamp": 1566691672311
+        //     },
+        //     {
+        //         "symbol": "BTC_USDT",
+        //         "tradeId": "600848670",
+        //         "price": "7960.12",
+        //         "size": "0.0198",
+        //         "side": "BUY",
+        //         "timestamp": 1566691672311
+        //     }
+        //     ]
+        // },
+        //     "result": true,
+        //     "timestamp": 1566691672311
+        // }
+        const data = this.safeValue(response, 'data', {});
+        const trades = this.safeValue(data, 'trades', []);
+        return this.parseTrades(trades, market, since, limit);
+    }
+    parseTrade(trade, market = undefined) {
+        // publicGetMarketTrades
+        // {
+        //     "symbol": "BTC_USDT",
+        //     "tradeId": "600848670",
+        //     "price": "7960.12",
+        //     "size": "0.0198",
+        //     "side": "BUY",
+        //     "timestamp": 1566691672311
+        // }
+        //
+        // privateGetTradeFills
+        // {
+        //     "id": 9876543210,
+        //     "orderId": 22334455,
+        //     "symbol": "BTC_USDT",
+        //     "side": "BUY",
+        //     "role":  "TAKER",
+        //     "price": "30000.00",
+        //     "size": "0.1000",
+        //     "fee":  "0.15",
+        //     "feeCoin":  "USDT",
+        //     "timestamp": 1566676132311
+        //   },
+        const timestamp = this.safeInteger(trade, 'timestamp');
+        return this.safeTrade({
+            'info': trade,
+            'id': this.safeString2(trade, 'tradeId', 'id'),
+            'order': this.safeString(trade, 'orderId'),
+            'symbol': this.safeString(trade, 'symbol').replace('_', '/'),
+            'side': this.safeStringLower(trade, 'side'),
+            'type': this.safeStringLower(trade, 'type'),
+            'takerOrMaker': this.safeStringLower(trade, 'role'),
+            'price': this.safeString(trade, 'price'),
+            'amount': this.safeString(trade, 'size'),
+            'cost': undefined,
+            'fee': {
+                'cost': this.safeString(trade, 'fee'),
+                'currency': this.safeCurrencyCode(this.safeString(trade, 'feeCoin')),
+                'rate': undefined,
+            },
+            'timestamp': timestamp,
+            'datetime': this.iso8601(timestamp),
+        }, market);
+    }
+    async fetchOrderBook(symbol, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOrderBook
+         * @description fetches information on open orders with bid (buy) and ask (sell) prices, volumes and other data
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-depth
+         * @param {string} symbol unified symbol of the market to fetch the order book for
+         * @param {int} [limit] the maximum amount of order book entries to return
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} A dictionary of order book structures
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        if (limit !== undefined) {
+            request['limit'] = Math.min(limit, 1000); // default 20, max 1000
+        }
+        const response = await this.publicGetMarketDepth(this.extend(request, params));
+        // {
+        // "data": {
+        //     "bids": [
+        //         ["29658.37", "0.0123"],
+        //         ["29658.35", "1.1234"],
+        //         ["29657.99", "2.2345"],
+        //         ["29657.56", "6.3456"],
+        //         ["29656.13", "8.4567"]
+        //     ],
+        //     "asks": [
+        //         ["29658.47", "0.0345"],
+        //         ["29658.65", "1.0456"],
+        //         ["29658.89", "3.5567"],
+        //         ["29659.43", "5.2678"],
+        //         ["29659.98", "1.9789"]
+        //     ]，
+        //     "updateTime": 1566676132311
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const orderBook = this.safeDict(response, 'data');
+        return this.parseOrderBook(orderBook, market['id'], undefined, 'bids', 'asks');
+    }
+    async fetchOHLCV(symbol, timeframe = '1m', since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOHLCV
+         * @description fetches historical candlestick data containing the open, high, low, and close price, and the volume of a market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-klines
+         * @param {string} symbol unified symbol of the market to fetch OHLCV data for
+         * @param {string} timeframe the length of time each candle represents
+         * @param {int} [since] timestamp in ms of the earliest candle to fetch
+         * @param {int} [limit] the maximum amount of candles to fetch
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {int[][]} A list of candles ordered as timestamp, open, high, low, close, volume
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        if (timeframe !== undefined) {
+            request['interval'] = this.timeframes[timeframe];
+        }
+        if (limit !== undefined) {
+            request['limit'] = Math.min(limit, 500); // default 100, max 500
+        }
+        if (since !== undefined) {
+            const duration = this.parseTimeframe(timeframe);
+            request['endTime'] = Math.min(this.sum(since, duration * limit * 1000), this.milliseconds());
+        }
+        const response = await this.publicGetMarketKlines(this.extend(request, params));
+        const data = this.safeDict(response, 'data', {});
+        const klines = this.safeList(data, 'klines', []);
+        // {
+        // "result": true,
+        // "data": {
+        //     "klines": [
+        //     {
+        //         "time": 1691649240000,
+        //         "open": "1851.27",
+        //         "close": "1851.32",
+        //         "high": "1851.32",
+        //         "low": "1851.27",
+        //         "volume": "0.542"
+        //     }
+        //     ]
+        // },
+        // "timestamp": 1691649271544
+        // }
+        return this.parseOHLCVs(klines, market, timeframe, since, limit);
+    }
+    parseOHLCV(ohlcv, market = undefined) {
+        // {
+        //     "time": 1691649240000,
+        //     "open": "1851.27",
+        //     "close": "1851.32",
+        //     "high": "1851.32",
+        //     "low": "1851.27",
+        //     "volume": "0.542"
+        // }
+        return [
+            this.safeInteger(ohlcv, 'time'),
+            this.safeNumber(ohlcv, 'open'),
+            this.safeNumber(ohlcv, 'high'),
+            this.safeNumber(ohlcv, 'low'),
+            this.safeNumber(ohlcv, 'close'),
+            this.safeNumber(ohlcv, 'volume'), // volume
+        ];
+    }
+    async fetchTickers(symbols = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchTickers
+         * @description fetches price tickers for multiple markets, statistical information calculated over the past 24 hours for each market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-24hr-ticker
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-book-ticker
+         * @param {string[]|undefined} symbols unified symbols of the markets to fetch the ticker for, all market tickers are returned if not assigned
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} a dictionary of ticker structures]
+         */
+        await this.loadMarkets();
+        if (params['type'] === undefined) {
+            params['type'] = 'SPOT';
+        }
+        const request = params;
+        const response = await this.publicGetMarketTickers(request);
+        // {
+        // "data": {
+        //     "tickers": [
+        //     {
+        //         "symbol": "BTC_USDT",
+        //         "time": 1545291675000,
+        //         "open": "7962.62",
+        //         "close": "7952.32",
+        //         "high": "7971.61",
+        //         "low": "7950.29",
+        //         "volume": "1.537",
+        //         "amount": "12032.56",
+        //         "count": 271585
+        //     },
+        //     {
+        //         "symbol": "ETH_USDT",
+        //         "time": 1545291675000,
+        //         "open": "1963.62",
+        //         "close": "1852.22",
+        //         "high": "1971.11",
+        //         "low": "1850.23",
+        //         "volume": "100.532",
+        //         "amount": "112012.51",
+        //         "count": 432211
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const response2 = await this.publicGetMarketBookTickers(request);
+        // {
+        // "data": {
+        //     "tickers": [
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        const data2 = this.safeDict(response2, 'data', {});
+        let tickers = this.safeList(data, 'tickers', []);
+        let tickers2 = this.safeList(data2, 'tickers', []);
+        const symbolsChanged = [];
+        if (symbols === undefined) {
+            symbols = [];
+            for (let i = 0; i < this.symbols.length; i++) {
+                const symbol = this.symbols[i];
+                symbols[i] = symbol.replace('/', '_');
+                symbolsChanged.push(this.marketApiSymbol(symbols[i]));
+            }
+        }
+        tickers = this.filterByArray(tickers, 'symbol', symbolsChanged);
+        tickers2 = this.filterByArray(tickers2, 'symbol', symbolsChanged);
+        let tickersFinal = [];
+        const unmatchedTickers = [];
+        for (let i = 0; i < tickers.length; i++) {
+            const ticker = tickers[i];
+            ticker['symbol'] = ticker['symbol'].replace('_', '/');
+            for (let j = 0; j < tickers2.length; j++) {
+                const ticker2 = tickers2[j];
+                ticker2['symbol'] = ticker2['symbol'].replace('_', '/');
+                if (ticker2['symbol'] === ticker['symbol']) {
+                    tickersFinal.push(this.extend(ticker, ticker2));
+                }
+                else {
+                    unmatchedTickers[i] = ticker;
+                    tickersFinal.push(ticker2);
+                }
+            }
+        }
+        for (let i = 0; i < unmatchedTickers.length; i++) {
+            const ticker = unmatchedTickers[i];
+            tickersFinal.push(ticker);
+        }
+        tickersFinal = this.filterByArray(tickersFinal, 'symbol', this.symbols);
+        return this.parseTickers(tickersFinal, this.symbols);
+    }
+    async fetchTicker(symbol, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchTicker
+         * @description fetches a price ticker, a statistical calculation with the information calculated over the past 24 hours for a specific market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-24hr-ticker
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/markets/get-book-ticker
+         * @param {string} symbol unified symbol of the market to fetch the ticker for
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} a [ticker structure]{@link https://docs.ccxt.com/#/?id=ticker-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+            'type': this.safeStringUpper(market, 'type'),
+        };
+        const response = await this.publicGetMarketTickers(this.extend(request, params));
+        // {
+        // "data": {
+        //     "tickers": [
+        //     {
+        //         "symbol": "BTC_USDT",
+        //         "time": 1545291675000,
+        //         "open": "7962.62",
+        //         "close": "7952.32",
+        //         "high": "7971.61",
+        //         "low": "7950.29",
+        //         "volume": "1.537",
+        //         "amount": "12032.56",
+        //         "count": 271585
+        //     },
+        //     {
+        //         "symbol": "ETH_USDT",
+        //         "time": 1545291675000,
+        //         "open": "1963.62",
+        //         "close": "1852.22",
+        //         "high": "1971.11",
+        //         "low": "1850.23",
+        //         "volume": "100.532",
+        //         "amount": "112012.51",
+        //         "count": 432211
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const response2 = await this.publicGetMarketBookTickers(this.extend(request, params));
+        // {
+        // "data": {
+        //     "tickers": [
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        const data2 = this.safeDict(response2, 'data', {});
+        const tickers = this.safeList(data, 'tickers', []);
+        const tickers2 = this.safeList(data2, 'tickers', []);
+        return this.parseTicker(this.extend(tickers[0], tickers2[0]), market);
+    }
+    parseTicker(ticker, market = undefined) {
+        // {
+        //     "symbol": "ETH_USDT",
+        //     "time": 1545291675000,
+        //     "open": "1963.62",
+        //     "close": "1852.22",
+        //     "high": "1971.11",
+        //     "low": "1850.23",
+        //     "volume": "100.532",
+        //     "amount": "112012.51",
+        //     "count": 432211
+        // }
+        const timestamp = this.safeNumber(ticker, 'time');
+        return this.safeTicker({
+            'symbol': this.safeString(ticker, 'symbol').replace('_', '/'),
+            'timestamp': timestamp,
+            'datetime': this.iso8601(timestamp),
+            'high': this.safeNumber(ticker, 'high'),
+            'low': this.safeNumber(ticker, 'low'),
+            'open': this.safeNumber(ticker, 'open'),
+            'close': this.safeNumber(ticker, 'close'),
+            'baseVolume': this.safeNumber(ticker, 'volume'),
+            'info': ticker,
+            'bid': this.safeNumber(ticker, 'bidPrice'),
+            'bidVolume': this.safeNumber(ticker, 'bidSize'),
+            'ask': this.safeNumber(ticker, 'askPrice'),
+            'askVolume': this.safeNumber(ticker, 'askSize'),
+            'vwap': undefined,
+            'last': this.safeString(ticker, 'last_price'),
+            'previousClose': undefined,
+            'change': undefined,
+            'percentage': undefined,
+            'average': undefined,
+            'quoteVolume': this.safeString(ticker, 'quote_volume'),
+        }, market);
+    }
+    async fetchBalance(params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchBalance
+         * @description query for balance and get the amount of funds available for trading or funds locked in orders
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/account/get-balance
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} a balance structure
+         */
+        await this.loadMarkets();
+        const response = await this.privateGetAccountBalances(this.extend(params));
+        // {
+        // "data": {
+        //     "balances": [
+        //     {
+        //         "coin": "BTC",
+        //         "free": "0.9000000",
+        //         "frozen": "0.00000000"
+        //     },
+        //     {
+        //         "coin": "USDT",
+        //         "free": "100.00000000",
+        //         "frozen": "900.00000000"
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        return this.parseBalance(response);
+    }
+    parseBalance(response) {
+        // {
+        // "data": {
+        //     "balances": [
+        //     {
+        //         "coin": "BTC",
+        //         "free": "0.9000000",
+        //         "frozen": "0.00000000"
+        //     },
+        //     {
+        //         "coin": "USDT",
+        //         "free": "100.00000000",
+        //         "frozen": "900.00000000"
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        const balances = this.safeList(data, 'balances', []);
+        const timestamp = this.safeString(response, 'timestamp');
+        const result = {
+            'info': balances,
+            'timestamp': timestamp,
+            'datetime': this.iso8601(timestamp),
+        };
+        for (let i = 0; i < response.length; i++) {
+            const balance = balances[i];
+            const currencyId = this.safeString(balance, 'coin');
+            const code = this.safeCurrencyCode(currencyId);
+            const account = this.account();
+            account['free'] = this.safeString(balance, 'free');
+            const frozen = this.safeNumber(balance, 'frozen');
+            account['total'] = (+account['free'] + frozen).toString();
+            result[code] = account;
+        }
+        return this.safeBalance(result);
+    }
+    async fetchOrders(symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name latoken#fetchOrders
+         * @description fetches information on multiple orders made by the user
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-all-orders
+         * @param {string} symbol unified market symbol of the market orders were made in
+         * @param {int} [since] the earliest time in ms to fetch orders for
+         * @param {int} [limit] the maximum number of order structures to retrieve
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        if (limit === undefined) {
+            limit = 50; // max = 200
+        }
+        else {
+            limit = Math.min(200, limit);
+        }
+        const response = this.privateGetTradeAllOrders(this.extend(request, params));
+        // {
+        // "data": {
+        //    "orders":[
+        //    {
+        //        // "orderId": 1234567890,
+        //        // "symbol": "BTC_USDT",
+        //        // "type": "LIMIT",
+        //        // "side": "SELL",
+        //        // "price": "30000.00",
+        //        // "size": "0.1000",
+        //        // "filledSize": "0.0500",
+        //        // "filledAmount": "1500.00",
+        //        // "fee":  "0.15",
+        //        // "feeCoin":  "USDT",
+        //        // "status": "OPEN",
+        //        // "IOC": false,
+        //        // "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //        // "source": "API",
+        //        // "createTime": 1566676132311,
+        //        // "updateTime": 1566676132311
+        //     }
+        //    ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        const orders = this.safeList(data, 'orders', []);
+        return this.parseOrders(orders, market, since, limit);
+    }
+    async fetchOpenOrders(symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOpenOrders
+         * @description fetch all unfilled currently open orders
+         * @see https://github.com/ace-exchange/ace-official-api-docs/blob/master/api_v2.md#open-api---order-list
+         * @param {string} symbol unified market symbol of the market orders were made in
+         * @param {int} [since] the earliest time in ms to fetch orders for
+         * @param {int} [limit] the maximum number of order structures to retrieve
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Order[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        if (symbol === undefined) {
+            throw new _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.ArgumentsRequired(this.id + ' fetchOpenOrders() requires a symbol argument');
+        }
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        if (limit === undefined) {
+            limit = 50; // max = 200
+        }
+        else {
+            limit = Math.min(200, limit);
+        }
+        const response = await this.privateGetTradeOpenOrders(this.extend(request, params));
+        // {
+        //     "data": {
+        //       "orders":[
+        //         {
+        //           "orderId": 1234567890,
+        //           "symbol": "BTC_USDT",
+        //           "type": "LIMIT",
+        //           "side": "SELL",
+        //           "price": "30000.00",
+        //           "size": "0.1000",
+        //           "filledSize": "0.0500",
+        //           "filledAmount": "1500.00",
+        //           "fee":  "0.15",
+        //           "feeCoin":  "USDT",
+        //           "status": "OPEN",
+        //           "IOC": false,
+        //           "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //           "source": "API",
+        //           "createTime": 1566676132311,
+        //           "updateTime": 1566676132311
+        //         }
+        //       ]
+        //     },
+        //     "result": true,
+        //     "timestamp": 1566676132311
+        //   }
+        const data = this.safeDict(response, 'data', {});
+        const orders = this.safeList(data, 'orders', []);
+        return this.parseOrders(orders, market, since, limit);
+    }
+    async fetchOrder(id, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOrder
+         * @description fetches information on an order made by the user
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-order
+         * @param {string} id the order id
+         * @param {string} symbol unified symbol of the market the order was made in
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets();
+        const clientOrderId = this.safeValue2(params, 'client_order_id', 'clientOrderId');
+        const request = {};
+        let response;
+        if (clientOrderId !== undefined) {
+            request['clientOrderId'] = clientOrderId;
+            params = this.omit(params, ['client_order_id', 'clientOrderId']);
+            response = this.privateGetTradeOrderByClientOrderId(this.extend(request, params));
+        }
+        else {
+            request['orderId'] = id;
+            response = this.privateGetTradeOrder(this.extend(request, params));
+        }
+        // {
+        // "data": {
+        //     "orderId": 1234567890,
+        //     "symbol": "BTC_USDT",
+        //     "type": "LIMIT",
+        //     "side": "SELL",
+        //     "price": "30000.00",
+        //     "size": "0.1000",
+        //     "filledSize": "0.0500",
+        //     "filledAmount": "1500.00",
+        //     "fee":  "0.15",
+        //     "feeCoin":  "USDT",
+        //     "status": "OPEN",
+        //     "IOC":  false,
+        //     "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //     "source": "API",
+        //     "createTime": 1566676132311,
+        //     "updateTime": 1566676132311
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        return this.parseOrder(data, undefined);
+    }
+    parseOrder(order, market = undefined) {
+        // {
+        //     "orderId": 1234567890,
+        //     "symbol": "BTC_USDT",
+        //     "type": "LIMIT",
+        //     "side": "SELL",
+        //     "price": "30000.00",
+        //     "size": "0.1000",
+        //     "filledSize": "0.0500",
+        //     "filledAmount": "1500.00",
+        //     "fee":  "0.15",
+        //     "feeCoin":  "USDT",
+        //     "status": "OPEN",
+        //     "IOC":  false,
+        //     "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194",
+        //     "source": "API",
+        //     "createTime": 1566676132311,
+        //     "updateTime": 1566676132311
+        // }
+        const timestamp = this.safeNumber(order, 'createTime');
+        const size = this.safeNumber(order, 'size');
+        const filledSize = this.safeNumber(order, 'filledSize');
+        const side = this.safeStringLower(order, 'side');
+        let remaining = size - filledSize;
+        let average = 0;
+        if (filledSize) {
+            average = this.safeNumber(order, 'filledAmount') / filledSize;
+        }
+        if (side === 'buy') {
+            remaining = filledSize - size;
+        }
+        return this.safeOrder({
+            'id': this.safeString(order, 'orderId'),
+            'clientOrderId': this.safeString(order, 'clientOrderId'),
+            'timestamp': timestamp,
+            'datetime': this.iso8601(timestamp),
+            'lastTradeTimestamp': this.safeNumber(order, 'updateTime'),
+            'status': this.safeStringLower(order, 'status'),
+            'symbol': this.safeString(order, 'symbol').replace('_', '/'),
+            'type': this.safeStringLower(order, 'type'),
+            'timeInForce': undefined,
+            'postOnly': this.safeBool(order, 'IOC'),
+            'side': side,
+            'price': this.safeNumber(order, 'price'),
+            'stopPrice': undefined,
+            'triggerPrice': this.safeNumber(order, 'price'),
+            'amount': size,
+            'filled': filledSize,
+            'remaining': remaining,
+            'cost': this.safeNumber(order, 'fee'),
+            'trades': undefined,
+            'average': average,
+            'fee': {
+                'currency': this.safeString(order, 'feeCoin'),
+                'cost': this.safeString(order, 'fee'),
+            },
+            'info': order,
+        }, market);
+    }
+    async fetchMyTrades(symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchMyTrades
+         * @description fetch all trades made by the user
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-fills
+         * @param {string} symbol unified symbol of the market to fetch trades for
+         * @param {int} [since] timestamp in ms of the earliest trade to fetch
+         * @param {int} [limit] the maximum amount of trades to fetch
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {Trade[]} a list of [trade structures]{@link https://docs.ccxt.com/#/?id=public-trades}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        const response = this.privateGetTradeFills(this.extend(request, params));
+        // {
+        // "data": {
+        //     "fills":[
+        //     {
+        //         "id": 9876543210,
+        //         "orderId": 123456789,
+        //         "symbol": "BTC_USDT",
+        //         "side": "SELL",
+        //         "role":  "TAKER",
+        //         "price": "30000.00",
+        //         "size": "0.1000",
+        //         "fee":  "0.15",
+        //         "feeCoin":  "USDT",
+        //         "timestamp": 1566676132311
+        //     },
+        //     {
+        //         "id": 9876543200,
+        //         "orderId": 123456789,
+        //         "symbol": "BTC_USDT",
+        //         "side": "SELL",
+        //         "role":  "TAKER",
+        //         "price": "29000.00",
+        //         "size": "0.1200",
+        //         "fee":  "0.145",
+        //         "feeCoin":  "USDT",
+        //         "timestamp": 1566676132310
+        //     }
+        //     ]
+        // },
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        const fills = this.safeList(data, 'fills', []);
+        return this.parseTrades(fills, market, since, limit);
+    }
+    async fetchOrderTrades(id, symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#fetchOrderTrades
+         * @description fetch all the trades made from a single order
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/get-fills-by-order-id
+         * @param {string} id order id
+         * @param {string} symbol unified market symbol
+         * @param {int} [since] the earliest time in ms to fetch trades for
+         * @param {int} [limit] the maximum number of trades to retrieve
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object[]} a list of [trade structures]{@link https://docs.ccxt.com/#/?id=trade-structure}
+         */
+        await this.loadMarkets();
+        const market = this.safeMarket(symbol);
+        const request = {
+            'orderId': id,
+        };
+        const response = await this.privateGetTradeFillsByOrderId(this.extend(request, params));
+        // {
+        //     "data": {
+        //       "fills":[
+        //         {
+        //           "id": 9876543210,
+        //           "orderId": 22334455,
+        //           "symbol": "BTC_USDT",
+        //           "side": "BUY",
+        //           "role":  "TAKER",
+        //           "price": "30000.00",
+        //           "size": "0.1000",
+        //           "fee":  "0.15",
+        //           "feeCoin":  "USDT",
+        //           "timestamp": 1566676132311
+        //         },
+        //         {
+        //           "id": 9876543200,
+        //           "orderId": 22334455,
+        //           "symbol": "BTC_USDT",
+        //           "side": "BUY",
+        //           "role":  "TAKER",
+        //           "price": "29000.00",
+        //           "size": "0.1200",
+        //           "fee":  "0.145",
+        //           "feeCoin":  "USDT",
+        //           "timestamp": 1566676132310
+        //         }
+        //       ]
+        //     },
+        //     "result": true,
+        //     "timestamp": 1566691672311
+        //   }
+        const data = this.safeDict(response, 'data');
+        const fills = this.safeList(data, 'fills', []);
+        return this.parseTrades(fills, market, since, limit);
+    }
+    async cancelOrder(id, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#cancelOrder
+         * @description cancels an open order
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/cancel-order
+         * @param {string} id order id
+         * @param {string} symbol unified symbol of the market the order was made in
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} An [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+            'orderId': id,
+        };
+        this.privateDeleteTradeOrder(this.extend(request, params));
+        // {
+        // "result": true,
+        // "timestamp": 1566691672311
+        // }
+        const order = this.safeOrder({ 'id': id, 'symbol': market['id'], 'info': {} }, market);
+        return order;
+    }
+    async cancelAllOrders(symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#cancelAllOrders
+         * @description cancel all open orders in a market
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/cancel-all-orders
+         * @param {string} symbol unified market symbol of the market to cancel orders in
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object[]} a list of [order structures]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+        };
+        this.privateDeleteTradeAllOrders(this.extend(request, params));
+        //  {
+        //  "result": true,
+        //  "timestamp": 1566691672311
+        //  }
+        const order = this.safeOrder({ 'symbol': market['id'], 'info': {} }, market);
+        return [order];
+    }
+    async createOrder(symbol, type, side, amount, price = undefined, params = {}) {
+        /**
+         * @method
+         * @name pionex#createOrder
+         * @description create a trade order
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/new-order
+         * @param {string} symbol unified symbol of the market to create an order in
+         * @param {string} type 'market' or 'limit'
+         * @param {string} side 'buy' or 'sell'
+         * @param {float} amount how much of currency you want to trade in units of base currency
+         * @param {float} [price] the price at which the order is to be fulfilled, in units of the quote currency, ignored in market orders
+         * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets();
+        const market = this.market(symbol);
+        const clientOrderId = this.safeString2(params, 'client_order_id', 'clientOrderId', this.uuid());
+        const request = {
+            'symbol': this.marketApiSymbol(market['id']),
+            'side': side.toUpperCase(),
+            'type': type.toUpperCase(),
+            'amount': this.amountToPrecision(symbol, amount),
+            'size': this.amountToPrecision(symbol, amount),
+            'IOC': this.safeBool(params, 'postOnly', false),
+            'clientOrderId': clientOrderId,
+        };
+        if (price) {
+            request['price'] = price;
+        }
+        const response = this.privatePostTradeOrder(this.extend(request, params));
+        // {
+        //     "data": {
+        //         "orderId": 1234567890,
+        //         "clientOrderId":  "9e3d93d6-e9a4-465a-a39c-2e48568fe194"
+        //     },
+        //     "result": true,
+        //     "timestamp": 1566691672311
+        // }
+        const data = this.safeDict(response, 'data', {});
+        request['orderId'] = data['orderId'];
+        return this.parseOrder(request, market);
+    }
+    async createOrders(orders, params = {}) {
+        /**
+         * @method
+         * @name pionex#createOrders
+         * @description create a list of trade orders
+         * @see https://pionex-doc.gitbook.io/apidocs/restful/orders/new-multiple-order
+         * @param {Array} orders list of orders to create, each object should contain the parameters required by createOrder, namely symbol, type, side, amount, price and params
+         * @param {object} [params]  extra parameters specific to the exchange API endpoint
+         * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
+         */
+        await this.loadMarkets();
+        const ordersRequests = [];
+        for (let i = 0; i < orders.length; i++) {
+            const rawOrder = orders[i];
+            const symbol = this.safeString(rawOrder, 'symbol');
+            const type = this.safeString(rawOrder, 'type');
+            const side = this.safeStringUpper(rawOrder, 'side');
+            const amount = this.safeNumber(rawOrder, 'amount');
+            const price = this.safeNumber(rawOrder, 'price');
+            const orderParams = this.safeDict(rawOrder, 'params', {});
+            const orderRequest = this.createOrderRequest(symbol, type, side, amount, price, orderParams);
+            ordersRequests.push(orderRequest);
+        }
+        const firstOrder = ordersRequests[0];
+        const firstSymbol = this.safeString(firstOrder, 'symbol');
+        const request = {
+            'symbol': firstSymbol,
+            'orders': ordersRequests,
+        };
+        const response = this.privatePostTradeMassOrder(this.extend(request, params));
+        const data = this.safeDict(response, 'data', {});
+        const orderIds = this.safeList(data, 'orderIds', []);
+        const responseOrders = [];
+        for (let i = 0; i < orderIds.length; i++) {
+            const responseOrder = this.safeDict(orderIds, i, {});
+            const orderRequests = this.safeDict(ordersRequests, i, {});
+            orderRequests['orderId'] = responseOrder['orderId'];
+            responseOrders.push(orderRequests);
+        }
+        return this.parseOrders(responseOrders);
+    }
+    sign(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
+        const endpointPath = '/api/v1/' + this.implodeParams(path, params);
+        let url = this.urls['api'][api] + endpointPath;
+        params = this.omit(params, this.extractParams(path));
+        if (params && method === 'GET' && api !== 'private') {
+            url += '?' + this.urlencode(params);
+        }
+        if (api === 'private') {
+            if (params && (method === 'POST' || method === 'DELETE')) {
+                body = this.json(params);
+            }
+            params['timestamp'] = this.milliseconds();
+            url += '?' + this.urlencode(params);
+            const sortedParams = this.keysort(params);
+            let structedPath = method + endpointPath + '?' + this.urlencode(sortedParams);
+            if (body) {
+                structedPath = structedPath + body;
+            }
+            const signature = this.hmac(this.encode(structedPath), this.encode(this.secret), _static_dependencies_noble_hashes_sha256_js__WEBPACK_IMPORTED_MODULE_3__/* .sha256 */ .s);
+            headers = {
+                'Content-Type': 'application/json',
+                'PIONEX-KEY': this.apiKey,
+                'PIONEX-SIGNATURE': signature,
+            };
+        }
+        return { 'url': url, 'method': method, 'body': body, 'headers': headers };
+    }
+    handleErrors(code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
+        if (response === undefined) {
+            return undefined; // fallback to the default error handler
+        }
+        if (!this.safeBool(response, 'result', false)) {
+            const feedback = this.id + ' ' + this.json(response);
+            this.throwExactlyMatchedException(this.exceptions, this.safeString(response, 'code'), feedback);
+            throw new _base_errors_js__WEBPACK_IMPORTED_MODULE_2__.ExchangeError(feedback);
+        }
+        return undefined;
+    }
+    createOrderRequest(symbol, type, side, amount, price = undefined, params = {}) {
+        const market = this.market(symbol);
+        const clientOrderId = this.safeString2(params, 'client_order_id', 'clientOrderId', this.uuid());
+        params = this.omit(params, ['client_order_id', 'clientOrderId']);
+        const request = {
+            'clientOrderId': clientOrderId,
+            'side': side,
+            'symbol': this.marketApiSymbol(market['id']),
+            'type': 'LIMIT',
+            'size': this.amountToPrecision(symbol, amount),
+            'price': price,
+        };
+        return this.extend(request, params);
+    }
+    marketApiSymbol(symbol) {
+        return symbol.replace('/', '_');
     }
 }
 
@@ -273935,6 +275313,29 @@ class coinbase extends _coinbase_js__WEBPACK_IMPORTED_MODULE_0__/* ["default"] *
         if (method) {
             method.call(this, client, message);
         }
+    }
+}
+
+
+/***/ }),
+
+/***/ 5918:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   A: () => (/* binding */ coinbaseadvanced)
+/* harmony export */ });
+/* harmony import */ var _coinbase_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(8160);
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+class coinbaseadvanced extends _coinbase_js__WEBPACK_IMPORTED_MODULE_0__/* ["default"] */ .A {
+    describe() {
+        return this.deepExtend(super.describe(), {
+            'id': 'coinbaseadvanced',
+            'name': 'Coinbase Advanced',
+            'alias': true,
+        });
     }
 }
 
@@ -377689,48 +379090,48 @@ YAHOO.lang = {
 var __webpack_exports__ = {};
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   AccountNotEnabled: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.AccountNotEnabled),
-/* harmony export */   AccountSuspended: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.AccountSuspended),
-/* harmony export */   AddressPending: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.AddressPending),
-/* harmony export */   ArgumentsRequired: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ArgumentsRequired),
-/* harmony export */   AuthenticationError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.AuthenticationError),
-/* harmony export */   BadRequest: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.BadRequest),
-/* harmony export */   BadResponse: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.BadResponse),
-/* harmony export */   BadSymbol: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.BadSymbol),
-/* harmony export */   BaseError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.BaseError),
-/* harmony export */   CancelPending: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.CancelPending),
-/* harmony export */   ChecksumError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ChecksumError),
-/* harmony export */   ContractUnavailable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ContractUnavailable),
-/* harmony export */   DDoSProtection: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.DDoSProtection),
-/* harmony export */   DuplicateOrderId: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.DuplicateOrderId),
+/* harmony export */   AccountNotEnabled: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.AccountNotEnabled),
+/* harmony export */   AccountSuspended: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.AccountSuspended),
+/* harmony export */   AddressPending: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.AddressPending),
+/* harmony export */   ArgumentsRequired: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ArgumentsRequired),
+/* harmony export */   AuthenticationError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.AuthenticationError),
+/* harmony export */   BadRequest: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.BadRequest),
+/* harmony export */   BadResponse: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.BadResponse),
+/* harmony export */   BadSymbol: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.BadSymbol),
+/* harmony export */   BaseError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.BaseError),
+/* harmony export */   CancelPending: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.CancelPending),
+/* harmony export */   ChecksumError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ChecksumError),
+/* harmony export */   ContractUnavailable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ContractUnavailable),
+/* harmony export */   DDoSProtection: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.DDoSProtection),
+/* harmony export */   DuplicateOrderId: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.DuplicateOrderId),
 /* harmony export */   Exchange: () => (/* reexport safe */ _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__.k),
-/* harmony export */   ExchangeClosedByUser: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ExchangeClosedByUser),
-/* harmony export */   ExchangeError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ExchangeError),
-/* harmony export */   ExchangeNotAvailable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ExchangeNotAvailable),
-/* harmony export */   InsufficientFunds: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.InsufficientFunds),
-/* harmony export */   InvalidAddress: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.InvalidAddress),
-/* harmony export */   InvalidNonce: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.InvalidNonce),
-/* harmony export */   InvalidOrder: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.InvalidOrder),
-/* harmony export */   InvalidProxySettings: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.InvalidProxySettings),
-/* harmony export */   ManualInteractionNeeded: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.ManualInteractionNeeded),
-/* harmony export */   MarginModeAlreadySet: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.MarginModeAlreadySet),
-/* harmony export */   MarketClosed: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.MarketClosed),
-/* harmony export */   NetworkError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.NetworkError),
-/* harmony export */   NoChange: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.NoChange),
-/* harmony export */   NotSupported: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.NotSupported),
-/* harmony export */   NullResponse: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.NullResponse),
-/* harmony export */   OnMaintenance: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OnMaintenance),
-/* harmony export */   OperationFailed: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OperationFailed),
-/* harmony export */   OperationRejected: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OperationRejected),
-/* harmony export */   OrderImmediatelyFillable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OrderImmediatelyFillable),
-/* harmony export */   OrderNotCached: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OrderNotCached),
-/* harmony export */   OrderNotFillable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OrderNotFillable),
-/* harmony export */   OrderNotFound: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.OrderNotFound),
-/* harmony export */   PermissionDenied: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.PermissionDenied),
-/* harmony export */   Precise: () => (/* reexport safe */ _src_base_Precise_js__WEBPACK_IMPORTED_MODULE_180__.Y),
-/* harmony export */   RateLimitExceeded: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.RateLimitExceeded),
-/* harmony export */   RequestTimeout: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.RequestTimeout),
-/* harmony export */   UnsubscribeError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__.UnsubscribeError),
+/* harmony export */   ExchangeClosedByUser: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ExchangeClosedByUser),
+/* harmony export */   ExchangeError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ExchangeError),
+/* harmony export */   ExchangeNotAvailable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ExchangeNotAvailable),
+/* harmony export */   InsufficientFunds: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.InsufficientFunds),
+/* harmony export */   InvalidAddress: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.InvalidAddress),
+/* harmony export */   InvalidNonce: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.InvalidNonce),
+/* harmony export */   InvalidOrder: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.InvalidOrder),
+/* harmony export */   InvalidProxySettings: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.InvalidProxySettings),
+/* harmony export */   ManualInteractionNeeded: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.ManualInteractionNeeded),
+/* harmony export */   MarginModeAlreadySet: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.MarginModeAlreadySet),
+/* harmony export */   MarketClosed: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.MarketClosed),
+/* harmony export */   NetworkError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.NetworkError),
+/* harmony export */   NoChange: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.NoChange),
+/* harmony export */   NotSupported: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.NotSupported),
+/* harmony export */   NullResponse: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.NullResponse),
+/* harmony export */   OnMaintenance: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OnMaintenance),
+/* harmony export */   OperationFailed: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OperationFailed),
+/* harmony export */   OperationRejected: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OperationRejected),
+/* harmony export */   OrderImmediatelyFillable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OrderImmediatelyFillable),
+/* harmony export */   OrderNotCached: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OrderNotCached),
+/* harmony export */   OrderNotFillable: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OrderNotFillable),
+/* harmony export */   OrderNotFound: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.OrderNotFound),
+/* harmony export */   PermissionDenied: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.PermissionDenied),
+/* harmony export */   Precise: () => (/* reexport safe */ _src_base_Precise_js__WEBPACK_IMPORTED_MODULE_182__.Y),
+/* harmony export */   RateLimitExceeded: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.RateLimitExceeded),
+/* harmony export */   RequestTimeout: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.RequestTimeout),
+/* harmony export */   UnsubscribeError: () => (/* reexport safe */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__.UnsubscribeError),
 /* harmony export */   ace: () => (/* reexport safe */ _src_ace_js__WEBPACK_IMPORTED_MODULE_1__.A),
 /* harmony export */   alpaca: () => (/* reexport safe */ _src_alpaca_js__WEBPACK_IMPORTED_MODULE_2__.A),
 /* harmony export */   ascendex: () => (/* reexport safe */ _src_ascendex_js__WEBPACK_IMPORTED_MODULE_3__.A),
@@ -377786,11 +379187,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   delta: () => (/* reexport safe */ _src_delta_js__WEBPACK_IMPORTED_MODULE_52__.A),
 /* harmony export */   deribit: () => (/* reexport safe */ _src_deribit_js__WEBPACK_IMPORTED_MODULE_53__.A),
 /* harmony export */   digifinex: () => (/* reexport safe */ _src_digifinex_js__WEBPACK_IMPORTED_MODULE_54__.A),
-/* harmony export */   errors: () => (/* reexport module object */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__),
+/* harmony export */   errors: () => (/* reexport module object */ _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__),
 /* harmony export */   exchanges: () => (/* binding */ exchanges),
 /* harmony export */   exmo: () => (/* reexport safe */ _src_exmo_js__WEBPACK_IMPORTED_MODULE_55__.A),
 /* harmony export */   fmfwio: () => (/* reexport safe */ _src_fmfwio_js__WEBPACK_IMPORTED_MODULE_56__.A),
-/* harmony export */   functions: () => (/* reexport module object */ _src_base_functions_js__WEBPACK_IMPORTED_MODULE_181__),
+/* harmony export */   functions: () => (/* reexport module object */ _src_base_functions_js__WEBPACK_IMPORTED_MODULE_183__),
 /* harmony export */   gate: () => (/* reexport safe */ _src_gate_js__WEBPACK_IMPORTED_MODULE_57__.A),
 /* harmony export */   gateio: () => (/* reexport safe */ _src_gateio_js__WEBPACK_IMPORTED_MODULE_58__.A),
 /* harmony export */   gemini: () => (/* reexport safe */ _src_gemini_js__WEBPACK_IMPORTED_MODULE_59__.A),
@@ -377826,30 +379227,31 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   paradex: () => (/* reexport safe */ _src_paradex_js__WEBPACK_IMPORTED_MODULE_89__.A),
 /* harmony export */   paymium: () => (/* reexport safe */ _src_paymium_js__WEBPACK_IMPORTED_MODULE_90__.A),
 /* harmony export */   phemex: () => (/* reexport safe */ _src_phemex_js__WEBPACK_IMPORTED_MODULE_91__.A),
-/* harmony export */   poloniex: () => (/* reexport safe */ _src_poloniex_js__WEBPACK_IMPORTED_MODULE_92__.A),
-/* harmony export */   poloniexfutures: () => (/* reexport safe */ _src_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_93__.A),
+/* harmony export */   pionex: () => (/* reexport safe */ _src_pionex_js__WEBPACK_IMPORTED_MODULE_92__.A),
+/* harmony export */   poloniex: () => (/* reexport safe */ _src_poloniex_js__WEBPACK_IMPORTED_MODULE_93__.A),
+/* harmony export */   poloniexfutures: () => (/* reexport safe */ _src_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_94__.A),
 /* harmony export */   pro: () => (/* binding */ pro),
-/* harmony export */   probit: () => (/* reexport safe */ _src_probit_js__WEBPACK_IMPORTED_MODULE_94__.A),
-/* harmony export */   timex: () => (/* reexport safe */ _src_timex_js__WEBPACK_IMPORTED_MODULE_95__.A),
-/* harmony export */   tokocrypto: () => (/* reexport safe */ _src_tokocrypto_js__WEBPACK_IMPORTED_MODULE_96__.A),
-/* harmony export */   tradeogre: () => (/* reexport safe */ _src_tradeogre_js__WEBPACK_IMPORTED_MODULE_97__.A),
-/* harmony export */   upbit: () => (/* reexport safe */ _src_upbit_js__WEBPACK_IMPORTED_MODULE_98__.A),
+/* harmony export */   probit: () => (/* reexport safe */ _src_probit_js__WEBPACK_IMPORTED_MODULE_95__.A),
+/* harmony export */   timex: () => (/* reexport safe */ _src_timex_js__WEBPACK_IMPORTED_MODULE_96__.A),
+/* harmony export */   tokocrypto: () => (/* reexport safe */ _src_tokocrypto_js__WEBPACK_IMPORTED_MODULE_97__.A),
+/* harmony export */   tradeogre: () => (/* reexport safe */ _src_tradeogre_js__WEBPACK_IMPORTED_MODULE_98__.A),
+/* harmony export */   upbit: () => (/* reexport safe */ _src_upbit_js__WEBPACK_IMPORTED_MODULE_99__.A),
 /* harmony export */   version: () => (/* binding */ version),
-/* harmony export */   vertex: () => (/* reexport safe */ _src_vertex_js__WEBPACK_IMPORTED_MODULE_99__.A),
-/* harmony export */   wavesexchange: () => (/* reexport safe */ _src_wavesexchange_js__WEBPACK_IMPORTED_MODULE_100__.A),
-/* harmony export */   wazirx: () => (/* reexport safe */ _src_wazirx_js__WEBPACK_IMPORTED_MODULE_101__.A),
-/* harmony export */   whitebit: () => (/* reexport safe */ _src_whitebit_js__WEBPACK_IMPORTED_MODULE_102__.A),
-/* harmony export */   woo: () => (/* reexport safe */ _src_woo_js__WEBPACK_IMPORTED_MODULE_103__.A),
-/* harmony export */   woofipro: () => (/* reexport safe */ _src_woofipro_js__WEBPACK_IMPORTED_MODULE_104__.A),
-/* harmony export */   xt: () => (/* reexport safe */ _src_xt_js__WEBPACK_IMPORTED_MODULE_105__.A),
-/* harmony export */   yobit: () => (/* reexport safe */ _src_yobit_js__WEBPACK_IMPORTED_MODULE_106__.A),
-/* harmony export */   zaif: () => (/* reexport safe */ _src_zaif_js__WEBPACK_IMPORTED_MODULE_107__.A),
-/* harmony export */   zonda: () => (/* reexport safe */ _src_zonda_js__WEBPACK_IMPORTED_MODULE_108__.A)
+/* harmony export */   vertex: () => (/* reexport safe */ _src_vertex_js__WEBPACK_IMPORTED_MODULE_100__.A),
+/* harmony export */   wavesexchange: () => (/* reexport safe */ _src_wavesexchange_js__WEBPACK_IMPORTED_MODULE_101__.A),
+/* harmony export */   wazirx: () => (/* reexport safe */ _src_wazirx_js__WEBPACK_IMPORTED_MODULE_102__.A),
+/* harmony export */   whitebit: () => (/* reexport safe */ _src_whitebit_js__WEBPACK_IMPORTED_MODULE_103__.A),
+/* harmony export */   woo: () => (/* reexport safe */ _src_woo_js__WEBPACK_IMPORTED_MODULE_104__.A),
+/* harmony export */   woofipro: () => (/* reexport safe */ _src_woofipro_js__WEBPACK_IMPORTED_MODULE_105__.A),
+/* harmony export */   xt: () => (/* reexport safe */ _src_xt_js__WEBPACK_IMPORTED_MODULE_106__.A),
+/* harmony export */   yobit: () => (/* reexport safe */ _src_yobit_js__WEBPACK_IMPORTED_MODULE_107__.A),
+/* harmony export */   zaif: () => (/* reexport safe */ _src_zaif_js__WEBPACK_IMPORTED_MODULE_108__.A),
+/* harmony export */   zonda: () => (/* reexport safe */ _src_zonda_js__WEBPACK_IMPORTED_MODULE_109__.A)
 /* harmony export */ });
 /* harmony import */ var _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2961);
-/* harmony import */ var _src_base_Precise_js__WEBPACK_IMPORTED_MODULE_180__ = __webpack_require__(5147);
-/* harmony import */ var _src_base_functions_js__WEBPACK_IMPORTED_MODULE_181__ = __webpack_require__(5095);
-/* harmony import */ var _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__ = __webpack_require__(2079);
+/* harmony import */ var _src_base_Precise_js__WEBPACK_IMPORTED_MODULE_182__ = __webpack_require__(5147);
+/* harmony import */ var _src_base_functions_js__WEBPACK_IMPORTED_MODULE_183__ = __webpack_require__(5095);
+/* harmony import */ var _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__ = __webpack_require__(2079);
 /* harmony import */ var _src_ace_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6729);
 /* harmony import */ var _src_alpaca_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(7930);
 /* harmony import */ var _src_ascendex_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(1411);
@@ -377941,94 +379343,96 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _src_paradex_js__WEBPACK_IMPORTED_MODULE_89__ = __webpack_require__(6993);
 /* harmony import */ var _src_paymium_js__WEBPACK_IMPORTED_MODULE_90__ = __webpack_require__(3280);
 /* harmony import */ var _src_phemex_js__WEBPACK_IMPORTED_MODULE_91__ = __webpack_require__(9075);
-/* harmony import */ var _src_poloniex_js__WEBPACK_IMPORTED_MODULE_92__ = __webpack_require__(288);
-/* harmony import */ var _src_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_93__ = __webpack_require__(6826);
-/* harmony import */ var _src_probit_js__WEBPACK_IMPORTED_MODULE_94__ = __webpack_require__(5037);
-/* harmony import */ var _src_timex_js__WEBPACK_IMPORTED_MODULE_95__ = __webpack_require__(6213);
-/* harmony import */ var _src_tokocrypto_js__WEBPACK_IMPORTED_MODULE_96__ = __webpack_require__(2490);
-/* harmony import */ var _src_tradeogre_js__WEBPACK_IMPORTED_MODULE_97__ = __webpack_require__(5887);
-/* harmony import */ var _src_upbit_js__WEBPACK_IMPORTED_MODULE_98__ = __webpack_require__(930);
-/* harmony import */ var _src_vertex_js__WEBPACK_IMPORTED_MODULE_99__ = __webpack_require__(4910);
-/* harmony import */ var _src_wavesexchange_js__WEBPACK_IMPORTED_MODULE_100__ = __webpack_require__(7073);
-/* harmony import */ var _src_wazirx_js__WEBPACK_IMPORTED_MODULE_101__ = __webpack_require__(3439);
-/* harmony import */ var _src_whitebit_js__WEBPACK_IMPORTED_MODULE_102__ = __webpack_require__(5336);
-/* harmony import */ var _src_woo_js__WEBPACK_IMPORTED_MODULE_103__ = __webpack_require__(669);
-/* harmony import */ var _src_woofipro_js__WEBPACK_IMPORTED_MODULE_104__ = __webpack_require__(9641);
-/* harmony import */ var _src_xt_js__WEBPACK_IMPORTED_MODULE_105__ = __webpack_require__(5344);
-/* harmony import */ var _src_yobit_js__WEBPACK_IMPORTED_MODULE_106__ = __webpack_require__(7469);
-/* harmony import */ var _src_zaif_js__WEBPACK_IMPORTED_MODULE_107__ = __webpack_require__(1530);
-/* harmony import */ var _src_zonda_js__WEBPACK_IMPORTED_MODULE_108__ = __webpack_require__(6022);
-/* harmony import */ var _src_pro_alpaca_js__WEBPACK_IMPORTED_MODULE_109__ = __webpack_require__(6810);
-/* harmony import */ var _src_pro_ascendex_js__WEBPACK_IMPORTED_MODULE_110__ = __webpack_require__(1657);
-/* harmony import */ var _src_pro_bequant_js__WEBPACK_IMPORTED_MODULE_111__ = __webpack_require__(9338);
-/* harmony import */ var _src_pro_binance_js__WEBPACK_IMPORTED_MODULE_112__ = __webpack_require__(9544);
-/* harmony import */ var _src_pro_binancecoinm_js__WEBPACK_IMPORTED_MODULE_113__ = __webpack_require__(902);
-/* harmony import */ var _src_pro_binanceus_js__WEBPACK_IMPORTED_MODULE_114__ = __webpack_require__(8788);
-/* harmony import */ var _src_pro_binanceusdm_js__WEBPACK_IMPORTED_MODULE_115__ = __webpack_require__(8251);
-/* harmony import */ var _src_pro_bingx_js__WEBPACK_IMPORTED_MODULE_116__ = __webpack_require__(9456);
-/* harmony import */ var _src_pro_bitcoincom_js__WEBPACK_IMPORTED_MODULE_117__ = __webpack_require__(5343);
-/* harmony import */ var _src_pro_bitfinex_js__WEBPACK_IMPORTED_MODULE_118__ = __webpack_require__(1038);
-/* harmony import */ var _src_pro_bitfinex2_js__WEBPACK_IMPORTED_MODULE_119__ = __webpack_require__(8255);
-/* harmony import */ var _src_pro_bitget_js__WEBPACK_IMPORTED_MODULE_120__ = __webpack_require__(205);
-/* harmony import */ var _src_pro_bithumb_js__WEBPACK_IMPORTED_MODULE_121__ = __webpack_require__(6181);
-/* harmony import */ var _src_pro_bitmart_js__WEBPACK_IMPORTED_MODULE_122__ = __webpack_require__(3069);
-/* harmony import */ var _src_pro_bitmex_js__WEBPACK_IMPORTED_MODULE_123__ = __webpack_require__(3731);
-/* harmony import */ var _src_pro_bitopro_js__WEBPACK_IMPORTED_MODULE_124__ = __webpack_require__(4401);
-/* harmony import */ var _src_pro_bitpanda_js__WEBPACK_IMPORTED_MODULE_125__ = __webpack_require__(8265);
-/* harmony import */ var _src_pro_bitrue_js__WEBPACK_IMPORTED_MODULE_126__ = __webpack_require__(3333);
-/* harmony import */ var _src_pro_bitstamp_js__WEBPACK_IMPORTED_MODULE_127__ = __webpack_require__(3326);
-/* harmony import */ var _src_pro_bitvavo_js__WEBPACK_IMPORTED_MODULE_128__ = __webpack_require__(1327);
-/* harmony import */ var _src_pro_blockchaincom_js__WEBPACK_IMPORTED_MODULE_129__ = __webpack_require__(8693);
-/* harmony import */ var _src_pro_blofin_js__WEBPACK_IMPORTED_MODULE_130__ = __webpack_require__(1672);
-/* harmony import */ var _src_pro_bybit_js__WEBPACK_IMPORTED_MODULE_131__ = __webpack_require__(8518);
-/* harmony import */ var _src_pro_cex_js__WEBPACK_IMPORTED_MODULE_132__ = __webpack_require__(3774);
-/* harmony import */ var _src_pro_coinbase_js__WEBPACK_IMPORTED_MODULE_133__ = __webpack_require__(8160);
-/* harmony import */ var _src_pro_coinbaseexchange_js__WEBPACK_IMPORTED_MODULE_134__ = __webpack_require__(1925);
-/* harmony import */ var _src_pro_coinbaseinternational_js__WEBPACK_IMPORTED_MODULE_135__ = __webpack_require__(998);
-/* harmony import */ var _src_pro_coincheck_js__WEBPACK_IMPORTED_MODULE_136__ = __webpack_require__(5317);
-/* harmony import */ var _src_pro_coinex_js__WEBPACK_IMPORTED_MODULE_137__ = __webpack_require__(9088);
-/* harmony import */ var _src_pro_coinone_js__WEBPACK_IMPORTED_MODULE_138__ = __webpack_require__(8673);
-/* harmony import */ var _src_pro_cryptocom_js__WEBPACK_IMPORTED_MODULE_139__ = __webpack_require__(6292);
-/* harmony import */ var _src_pro_currencycom_js__WEBPACK_IMPORTED_MODULE_140__ = __webpack_require__(6302);
-/* harmony import */ var _src_pro_deribit_js__WEBPACK_IMPORTED_MODULE_141__ = __webpack_require__(7791);
-/* harmony import */ var _src_pro_exmo_js__WEBPACK_IMPORTED_MODULE_142__ = __webpack_require__(5233);
-/* harmony import */ var _src_pro_gate_js__WEBPACK_IMPORTED_MODULE_143__ = __webpack_require__(9195);
-/* harmony import */ var _src_pro_gateio_js__WEBPACK_IMPORTED_MODULE_144__ = __webpack_require__(5843);
-/* harmony import */ var _src_pro_gemini_js__WEBPACK_IMPORTED_MODULE_145__ = __webpack_require__(375);
-/* harmony import */ var _src_pro_hashkey_js__WEBPACK_IMPORTED_MODULE_146__ = __webpack_require__(1481);
-/* harmony import */ var _src_pro_hitbtc_js__WEBPACK_IMPORTED_MODULE_147__ = __webpack_require__(4524);
-/* harmony import */ var _src_pro_hollaex_js__WEBPACK_IMPORTED_MODULE_148__ = __webpack_require__(8247);
-/* harmony import */ var _src_pro_htx_js__WEBPACK_IMPORTED_MODULE_149__ = __webpack_require__(3898);
-/* harmony import */ var _src_pro_huobi_js__WEBPACK_IMPORTED_MODULE_150__ = __webpack_require__(6335);
-/* harmony import */ var _src_pro_huobijp_js__WEBPACK_IMPORTED_MODULE_151__ = __webpack_require__(6973);
-/* harmony import */ var _src_pro_hyperliquid_js__WEBPACK_IMPORTED_MODULE_152__ = __webpack_require__(3984);
-/* harmony import */ var _src_pro_idex_js__WEBPACK_IMPORTED_MODULE_153__ = __webpack_require__(460);
-/* harmony import */ var _src_pro_independentreserve_js__WEBPACK_IMPORTED_MODULE_154__ = __webpack_require__(98);
-/* harmony import */ var _src_pro_kraken_js__WEBPACK_IMPORTED_MODULE_155__ = __webpack_require__(9050);
-/* harmony import */ var _src_pro_krakenfutures_js__WEBPACK_IMPORTED_MODULE_156__ = __webpack_require__(6396);
-/* harmony import */ var _src_pro_kucoin_js__WEBPACK_IMPORTED_MODULE_157__ = __webpack_require__(4965);
-/* harmony import */ var _src_pro_kucoinfutures_js__WEBPACK_IMPORTED_MODULE_158__ = __webpack_require__(905);
-/* harmony import */ var _src_pro_lbank_js__WEBPACK_IMPORTED_MODULE_159__ = __webpack_require__(1736);
-/* harmony import */ var _src_pro_luno_js__WEBPACK_IMPORTED_MODULE_160__ = __webpack_require__(2208);
-/* harmony import */ var _src_pro_mexc_js__WEBPACK_IMPORTED_MODULE_161__ = __webpack_require__(9219);
-/* harmony import */ var _src_pro_ndax_js__WEBPACK_IMPORTED_MODULE_162__ = __webpack_require__(3887);
-/* harmony import */ var _src_pro_okcoin_js__WEBPACK_IMPORTED_MODULE_163__ = __webpack_require__(6187);
-/* harmony import */ var _src_pro_okx_js__WEBPACK_IMPORTED_MODULE_164__ = __webpack_require__(8588);
-/* harmony import */ var _src_pro_onetrading_js__WEBPACK_IMPORTED_MODULE_165__ = __webpack_require__(4357);
-/* harmony import */ var _src_pro_oxfun_js__WEBPACK_IMPORTED_MODULE_166__ = __webpack_require__(550);
-/* harmony import */ var _src_pro_p2b_js__WEBPACK_IMPORTED_MODULE_167__ = __webpack_require__(4934);
-/* harmony import */ var _src_pro_paradex_js__WEBPACK_IMPORTED_MODULE_168__ = __webpack_require__(1057);
-/* harmony import */ var _src_pro_phemex_js__WEBPACK_IMPORTED_MODULE_169__ = __webpack_require__(1619);
-/* harmony import */ var _src_pro_poloniex_js__WEBPACK_IMPORTED_MODULE_170__ = __webpack_require__(3456);
-/* harmony import */ var _src_pro_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_171__ = __webpack_require__(5850);
-/* harmony import */ var _src_pro_probit_js__WEBPACK_IMPORTED_MODULE_172__ = __webpack_require__(5738);
-/* harmony import */ var _src_pro_upbit_js__WEBPACK_IMPORTED_MODULE_173__ = __webpack_require__(5794);
-/* harmony import */ var _src_pro_vertex_js__WEBPACK_IMPORTED_MODULE_174__ = __webpack_require__(910);
-/* harmony import */ var _src_pro_wazirx_js__WEBPACK_IMPORTED_MODULE_175__ = __webpack_require__(9279);
-/* harmony import */ var _src_pro_whitebit_js__WEBPACK_IMPORTED_MODULE_176__ = __webpack_require__(4712);
-/* harmony import */ var _src_pro_woo_js__WEBPACK_IMPORTED_MODULE_177__ = __webpack_require__(5869);
-/* harmony import */ var _src_pro_woofipro_js__WEBPACK_IMPORTED_MODULE_178__ = __webpack_require__(8713);
-/* harmony import */ var _src_pro_xt_js__WEBPACK_IMPORTED_MODULE_179__ = __webpack_require__(2368);
+/* harmony import */ var _src_pionex_js__WEBPACK_IMPORTED_MODULE_92__ = __webpack_require__(9439);
+/* harmony import */ var _src_poloniex_js__WEBPACK_IMPORTED_MODULE_93__ = __webpack_require__(288);
+/* harmony import */ var _src_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_94__ = __webpack_require__(6826);
+/* harmony import */ var _src_probit_js__WEBPACK_IMPORTED_MODULE_95__ = __webpack_require__(5037);
+/* harmony import */ var _src_timex_js__WEBPACK_IMPORTED_MODULE_96__ = __webpack_require__(6213);
+/* harmony import */ var _src_tokocrypto_js__WEBPACK_IMPORTED_MODULE_97__ = __webpack_require__(2490);
+/* harmony import */ var _src_tradeogre_js__WEBPACK_IMPORTED_MODULE_98__ = __webpack_require__(5887);
+/* harmony import */ var _src_upbit_js__WEBPACK_IMPORTED_MODULE_99__ = __webpack_require__(930);
+/* harmony import */ var _src_vertex_js__WEBPACK_IMPORTED_MODULE_100__ = __webpack_require__(4910);
+/* harmony import */ var _src_wavesexchange_js__WEBPACK_IMPORTED_MODULE_101__ = __webpack_require__(7073);
+/* harmony import */ var _src_wazirx_js__WEBPACK_IMPORTED_MODULE_102__ = __webpack_require__(3439);
+/* harmony import */ var _src_whitebit_js__WEBPACK_IMPORTED_MODULE_103__ = __webpack_require__(5336);
+/* harmony import */ var _src_woo_js__WEBPACK_IMPORTED_MODULE_104__ = __webpack_require__(669);
+/* harmony import */ var _src_woofipro_js__WEBPACK_IMPORTED_MODULE_105__ = __webpack_require__(9641);
+/* harmony import */ var _src_xt_js__WEBPACK_IMPORTED_MODULE_106__ = __webpack_require__(5344);
+/* harmony import */ var _src_yobit_js__WEBPACK_IMPORTED_MODULE_107__ = __webpack_require__(7469);
+/* harmony import */ var _src_zaif_js__WEBPACK_IMPORTED_MODULE_108__ = __webpack_require__(1530);
+/* harmony import */ var _src_zonda_js__WEBPACK_IMPORTED_MODULE_109__ = __webpack_require__(6022);
+/* harmony import */ var _src_pro_alpaca_js__WEBPACK_IMPORTED_MODULE_110__ = __webpack_require__(6810);
+/* harmony import */ var _src_pro_ascendex_js__WEBPACK_IMPORTED_MODULE_111__ = __webpack_require__(1657);
+/* harmony import */ var _src_pro_bequant_js__WEBPACK_IMPORTED_MODULE_112__ = __webpack_require__(9338);
+/* harmony import */ var _src_pro_binance_js__WEBPACK_IMPORTED_MODULE_113__ = __webpack_require__(9544);
+/* harmony import */ var _src_pro_binancecoinm_js__WEBPACK_IMPORTED_MODULE_114__ = __webpack_require__(902);
+/* harmony import */ var _src_pro_binanceus_js__WEBPACK_IMPORTED_MODULE_115__ = __webpack_require__(8788);
+/* harmony import */ var _src_pro_binanceusdm_js__WEBPACK_IMPORTED_MODULE_116__ = __webpack_require__(8251);
+/* harmony import */ var _src_pro_bingx_js__WEBPACK_IMPORTED_MODULE_117__ = __webpack_require__(9456);
+/* harmony import */ var _src_pro_bitcoincom_js__WEBPACK_IMPORTED_MODULE_118__ = __webpack_require__(5343);
+/* harmony import */ var _src_pro_bitfinex_js__WEBPACK_IMPORTED_MODULE_119__ = __webpack_require__(1038);
+/* harmony import */ var _src_pro_bitfinex2_js__WEBPACK_IMPORTED_MODULE_120__ = __webpack_require__(8255);
+/* harmony import */ var _src_pro_bitget_js__WEBPACK_IMPORTED_MODULE_121__ = __webpack_require__(205);
+/* harmony import */ var _src_pro_bithumb_js__WEBPACK_IMPORTED_MODULE_122__ = __webpack_require__(6181);
+/* harmony import */ var _src_pro_bitmart_js__WEBPACK_IMPORTED_MODULE_123__ = __webpack_require__(3069);
+/* harmony import */ var _src_pro_bitmex_js__WEBPACK_IMPORTED_MODULE_124__ = __webpack_require__(3731);
+/* harmony import */ var _src_pro_bitopro_js__WEBPACK_IMPORTED_MODULE_125__ = __webpack_require__(4401);
+/* harmony import */ var _src_pro_bitpanda_js__WEBPACK_IMPORTED_MODULE_126__ = __webpack_require__(8265);
+/* harmony import */ var _src_pro_bitrue_js__WEBPACK_IMPORTED_MODULE_127__ = __webpack_require__(3333);
+/* harmony import */ var _src_pro_bitstamp_js__WEBPACK_IMPORTED_MODULE_128__ = __webpack_require__(3326);
+/* harmony import */ var _src_pro_bitvavo_js__WEBPACK_IMPORTED_MODULE_129__ = __webpack_require__(1327);
+/* harmony import */ var _src_pro_blockchaincom_js__WEBPACK_IMPORTED_MODULE_130__ = __webpack_require__(8693);
+/* harmony import */ var _src_pro_blofin_js__WEBPACK_IMPORTED_MODULE_131__ = __webpack_require__(1672);
+/* harmony import */ var _src_pro_bybit_js__WEBPACK_IMPORTED_MODULE_132__ = __webpack_require__(8518);
+/* harmony import */ var _src_pro_cex_js__WEBPACK_IMPORTED_MODULE_133__ = __webpack_require__(3774);
+/* harmony import */ var _src_pro_coinbase_js__WEBPACK_IMPORTED_MODULE_134__ = __webpack_require__(8160);
+/* harmony import */ var _src_pro_coinbaseadvanced_js__WEBPACK_IMPORTED_MODULE_135__ = __webpack_require__(5918);
+/* harmony import */ var _src_pro_coinbaseexchange_js__WEBPACK_IMPORTED_MODULE_136__ = __webpack_require__(1925);
+/* harmony import */ var _src_pro_coinbaseinternational_js__WEBPACK_IMPORTED_MODULE_137__ = __webpack_require__(998);
+/* harmony import */ var _src_pro_coincheck_js__WEBPACK_IMPORTED_MODULE_138__ = __webpack_require__(5317);
+/* harmony import */ var _src_pro_coinex_js__WEBPACK_IMPORTED_MODULE_139__ = __webpack_require__(9088);
+/* harmony import */ var _src_pro_coinone_js__WEBPACK_IMPORTED_MODULE_140__ = __webpack_require__(8673);
+/* harmony import */ var _src_pro_cryptocom_js__WEBPACK_IMPORTED_MODULE_141__ = __webpack_require__(6292);
+/* harmony import */ var _src_pro_currencycom_js__WEBPACK_IMPORTED_MODULE_142__ = __webpack_require__(6302);
+/* harmony import */ var _src_pro_deribit_js__WEBPACK_IMPORTED_MODULE_143__ = __webpack_require__(7791);
+/* harmony import */ var _src_pro_exmo_js__WEBPACK_IMPORTED_MODULE_144__ = __webpack_require__(5233);
+/* harmony import */ var _src_pro_gate_js__WEBPACK_IMPORTED_MODULE_145__ = __webpack_require__(9195);
+/* harmony import */ var _src_pro_gateio_js__WEBPACK_IMPORTED_MODULE_146__ = __webpack_require__(5843);
+/* harmony import */ var _src_pro_gemini_js__WEBPACK_IMPORTED_MODULE_147__ = __webpack_require__(375);
+/* harmony import */ var _src_pro_hashkey_js__WEBPACK_IMPORTED_MODULE_148__ = __webpack_require__(1481);
+/* harmony import */ var _src_pro_hitbtc_js__WEBPACK_IMPORTED_MODULE_149__ = __webpack_require__(4524);
+/* harmony import */ var _src_pro_hollaex_js__WEBPACK_IMPORTED_MODULE_150__ = __webpack_require__(8247);
+/* harmony import */ var _src_pro_htx_js__WEBPACK_IMPORTED_MODULE_151__ = __webpack_require__(3898);
+/* harmony import */ var _src_pro_huobi_js__WEBPACK_IMPORTED_MODULE_152__ = __webpack_require__(6335);
+/* harmony import */ var _src_pro_huobijp_js__WEBPACK_IMPORTED_MODULE_153__ = __webpack_require__(6973);
+/* harmony import */ var _src_pro_hyperliquid_js__WEBPACK_IMPORTED_MODULE_154__ = __webpack_require__(3984);
+/* harmony import */ var _src_pro_idex_js__WEBPACK_IMPORTED_MODULE_155__ = __webpack_require__(460);
+/* harmony import */ var _src_pro_independentreserve_js__WEBPACK_IMPORTED_MODULE_156__ = __webpack_require__(98);
+/* harmony import */ var _src_pro_kraken_js__WEBPACK_IMPORTED_MODULE_157__ = __webpack_require__(9050);
+/* harmony import */ var _src_pro_krakenfutures_js__WEBPACK_IMPORTED_MODULE_158__ = __webpack_require__(6396);
+/* harmony import */ var _src_pro_kucoin_js__WEBPACK_IMPORTED_MODULE_159__ = __webpack_require__(4965);
+/* harmony import */ var _src_pro_kucoinfutures_js__WEBPACK_IMPORTED_MODULE_160__ = __webpack_require__(905);
+/* harmony import */ var _src_pro_lbank_js__WEBPACK_IMPORTED_MODULE_161__ = __webpack_require__(1736);
+/* harmony import */ var _src_pro_luno_js__WEBPACK_IMPORTED_MODULE_162__ = __webpack_require__(2208);
+/* harmony import */ var _src_pro_mexc_js__WEBPACK_IMPORTED_MODULE_163__ = __webpack_require__(9219);
+/* harmony import */ var _src_pro_ndax_js__WEBPACK_IMPORTED_MODULE_164__ = __webpack_require__(3887);
+/* harmony import */ var _src_pro_okcoin_js__WEBPACK_IMPORTED_MODULE_165__ = __webpack_require__(6187);
+/* harmony import */ var _src_pro_okx_js__WEBPACK_IMPORTED_MODULE_166__ = __webpack_require__(8588);
+/* harmony import */ var _src_pro_onetrading_js__WEBPACK_IMPORTED_MODULE_167__ = __webpack_require__(4357);
+/* harmony import */ var _src_pro_oxfun_js__WEBPACK_IMPORTED_MODULE_168__ = __webpack_require__(550);
+/* harmony import */ var _src_pro_p2b_js__WEBPACK_IMPORTED_MODULE_169__ = __webpack_require__(4934);
+/* harmony import */ var _src_pro_paradex_js__WEBPACK_IMPORTED_MODULE_170__ = __webpack_require__(1057);
+/* harmony import */ var _src_pro_phemex_js__WEBPACK_IMPORTED_MODULE_171__ = __webpack_require__(1619);
+/* harmony import */ var _src_pro_poloniex_js__WEBPACK_IMPORTED_MODULE_172__ = __webpack_require__(3456);
+/* harmony import */ var _src_pro_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_173__ = __webpack_require__(5850);
+/* harmony import */ var _src_pro_probit_js__WEBPACK_IMPORTED_MODULE_174__ = __webpack_require__(5738);
+/* harmony import */ var _src_pro_upbit_js__WEBPACK_IMPORTED_MODULE_175__ = __webpack_require__(5794);
+/* harmony import */ var _src_pro_vertex_js__WEBPACK_IMPORTED_MODULE_176__ = __webpack_require__(910);
+/* harmony import */ var _src_pro_wazirx_js__WEBPACK_IMPORTED_MODULE_177__ = __webpack_require__(9279);
+/* harmony import */ var _src_pro_whitebit_js__WEBPACK_IMPORTED_MODULE_178__ = __webpack_require__(4712);
+/* harmony import */ var _src_pro_woo_js__WEBPACK_IMPORTED_MODULE_179__ = __webpack_require__(5869);
+/* harmony import */ var _src_pro_woofipro_js__WEBPACK_IMPORTED_MODULE_180__ = __webpack_require__(8713);
+/* harmony import */ var _src_pro_xt_js__WEBPACK_IMPORTED_MODULE_181__ = __webpack_require__(2368);
 /*
 
 MIT License
@@ -378066,6 +379470,7 @@ SOFTWARE.
 const version = '4.4.19';
 _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchange */ .k.ccxtVersion = version;
 //-----------------------------------------------------------------------------
+
 
 
 
@@ -378246,6 +379651,7 @@ _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchange */ .k.ccxtVersion
 
 
 
+
 const exchanges = {
     'ace': _src_ace_js__WEBPACK_IMPORTED_MODULE_1__/* ["default"] */ .A,
     'alpaca': _src_alpaca_js__WEBPACK_IMPORTED_MODULE_2__/* ["default"] */ .A,
@@ -378338,96 +379744,98 @@ const exchanges = {
     'paradex': _src_paradex_js__WEBPACK_IMPORTED_MODULE_89__/* ["default"] */ .A,
     'paymium': _src_paymium_js__WEBPACK_IMPORTED_MODULE_90__/* ["default"] */ .A,
     'phemex': _src_phemex_js__WEBPACK_IMPORTED_MODULE_91__/* ["default"] */ .A,
-    'poloniex': _src_poloniex_js__WEBPACK_IMPORTED_MODULE_92__/* ["default"] */ .A,
-    'poloniexfutures': _src_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_93__/* ["default"] */ .A,
-    'probit': _src_probit_js__WEBPACK_IMPORTED_MODULE_94__/* ["default"] */ .A,
-    'timex': _src_timex_js__WEBPACK_IMPORTED_MODULE_95__/* ["default"] */ .A,
-    'tokocrypto': _src_tokocrypto_js__WEBPACK_IMPORTED_MODULE_96__/* ["default"] */ .A,
-    'tradeogre': _src_tradeogre_js__WEBPACK_IMPORTED_MODULE_97__/* ["default"] */ .A,
-    'upbit': _src_upbit_js__WEBPACK_IMPORTED_MODULE_98__/* ["default"] */ .A,
-    'vertex': _src_vertex_js__WEBPACK_IMPORTED_MODULE_99__/* ["default"] */ .A,
-    'wavesexchange': _src_wavesexchange_js__WEBPACK_IMPORTED_MODULE_100__/* ["default"] */ .A,
-    'wazirx': _src_wazirx_js__WEBPACK_IMPORTED_MODULE_101__/* ["default"] */ .A,
-    'whitebit': _src_whitebit_js__WEBPACK_IMPORTED_MODULE_102__/* ["default"] */ .A,
-    'woo': _src_woo_js__WEBPACK_IMPORTED_MODULE_103__/* ["default"] */ .A,
-    'woofipro': _src_woofipro_js__WEBPACK_IMPORTED_MODULE_104__/* ["default"] */ .A,
-    'xt': _src_xt_js__WEBPACK_IMPORTED_MODULE_105__/* ["default"] */ .A,
-    'yobit': _src_yobit_js__WEBPACK_IMPORTED_MODULE_106__/* ["default"] */ .A,
-    'zaif': _src_zaif_js__WEBPACK_IMPORTED_MODULE_107__/* ["default"] */ .A,
-    'zonda': _src_zonda_js__WEBPACK_IMPORTED_MODULE_108__/* ["default"] */ .A,
+    'pionex': _src_pionex_js__WEBPACK_IMPORTED_MODULE_92__/* ["default"] */ .A,
+    'poloniex': _src_poloniex_js__WEBPACK_IMPORTED_MODULE_93__/* ["default"] */ .A,
+    'poloniexfutures': _src_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_94__/* ["default"] */ .A,
+    'probit': _src_probit_js__WEBPACK_IMPORTED_MODULE_95__/* ["default"] */ .A,
+    'timex': _src_timex_js__WEBPACK_IMPORTED_MODULE_96__/* ["default"] */ .A,
+    'tokocrypto': _src_tokocrypto_js__WEBPACK_IMPORTED_MODULE_97__/* ["default"] */ .A,
+    'tradeogre': _src_tradeogre_js__WEBPACK_IMPORTED_MODULE_98__/* ["default"] */ .A,
+    'upbit': _src_upbit_js__WEBPACK_IMPORTED_MODULE_99__/* ["default"] */ .A,
+    'vertex': _src_vertex_js__WEBPACK_IMPORTED_MODULE_100__/* ["default"] */ .A,
+    'wavesexchange': _src_wavesexchange_js__WEBPACK_IMPORTED_MODULE_101__/* ["default"] */ .A,
+    'wazirx': _src_wazirx_js__WEBPACK_IMPORTED_MODULE_102__/* ["default"] */ .A,
+    'whitebit': _src_whitebit_js__WEBPACK_IMPORTED_MODULE_103__/* ["default"] */ .A,
+    'woo': _src_woo_js__WEBPACK_IMPORTED_MODULE_104__/* ["default"] */ .A,
+    'woofipro': _src_woofipro_js__WEBPACK_IMPORTED_MODULE_105__/* ["default"] */ .A,
+    'xt': _src_xt_js__WEBPACK_IMPORTED_MODULE_106__/* ["default"] */ .A,
+    'yobit': _src_yobit_js__WEBPACK_IMPORTED_MODULE_107__/* ["default"] */ .A,
+    'zaif': _src_zaif_js__WEBPACK_IMPORTED_MODULE_108__/* ["default"] */ .A,
+    'zonda': _src_zonda_js__WEBPACK_IMPORTED_MODULE_109__/* ["default"] */ .A,
 };
 const pro = {
-    'alpaca': _src_pro_alpaca_js__WEBPACK_IMPORTED_MODULE_109__/* ["default"] */ .A,
-    'ascendex': _src_pro_ascendex_js__WEBPACK_IMPORTED_MODULE_110__/* ["default"] */ .A,
-    'bequant': _src_pro_bequant_js__WEBPACK_IMPORTED_MODULE_111__/* ["default"] */ .A,
-    'binance': _src_pro_binance_js__WEBPACK_IMPORTED_MODULE_112__/* ["default"] */ .A,
-    'binancecoinm': _src_pro_binancecoinm_js__WEBPACK_IMPORTED_MODULE_113__/* ["default"] */ .A,
-    'binanceus': _src_pro_binanceus_js__WEBPACK_IMPORTED_MODULE_114__/* ["default"] */ .A,
-    'binanceusdm': _src_pro_binanceusdm_js__WEBPACK_IMPORTED_MODULE_115__/* ["default"] */ .A,
-    'bingx': _src_pro_bingx_js__WEBPACK_IMPORTED_MODULE_116__/* ["default"] */ .A,
-    'bitcoincom': _src_pro_bitcoincom_js__WEBPACK_IMPORTED_MODULE_117__/* ["default"] */ .A,
-    'bitfinex': _src_pro_bitfinex_js__WEBPACK_IMPORTED_MODULE_118__/* ["default"] */ .A,
-    'bitfinex2': _src_pro_bitfinex2_js__WEBPACK_IMPORTED_MODULE_119__/* ["default"] */ .A,
-    'bitget': _src_pro_bitget_js__WEBPACK_IMPORTED_MODULE_120__/* ["default"] */ .A,
-    'bithumb': _src_pro_bithumb_js__WEBPACK_IMPORTED_MODULE_121__/* ["default"] */ .A,
-    'bitmart': _src_pro_bitmart_js__WEBPACK_IMPORTED_MODULE_122__/* ["default"] */ .A,
-    'bitmex': _src_pro_bitmex_js__WEBPACK_IMPORTED_MODULE_123__/* ["default"] */ .A,
-    'bitopro': _src_pro_bitopro_js__WEBPACK_IMPORTED_MODULE_124__/* ["default"] */ .A,
-    'bitpanda': _src_pro_bitpanda_js__WEBPACK_IMPORTED_MODULE_125__/* ["default"] */ .A,
-    'bitrue': _src_pro_bitrue_js__WEBPACK_IMPORTED_MODULE_126__/* ["default"] */ .A,
-    'bitstamp': _src_pro_bitstamp_js__WEBPACK_IMPORTED_MODULE_127__/* ["default"] */ .A,
-    'bitvavo': _src_pro_bitvavo_js__WEBPACK_IMPORTED_MODULE_128__/* ["default"] */ .A,
-    'blockchaincom': _src_pro_blockchaincom_js__WEBPACK_IMPORTED_MODULE_129__/* ["default"] */ .A,
-    'blofin': _src_pro_blofin_js__WEBPACK_IMPORTED_MODULE_130__/* ["default"] */ .A,
-    'bybit': _src_pro_bybit_js__WEBPACK_IMPORTED_MODULE_131__/* ["default"] */ .A,
-    'cex': _src_pro_cex_js__WEBPACK_IMPORTED_MODULE_132__/* ["default"] */ .A,
-    'coinbase': _src_pro_coinbase_js__WEBPACK_IMPORTED_MODULE_133__/* ["default"] */ .A,
-    'coinbaseexchange': _src_pro_coinbaseexchange_js__WEBPACK_IMPORTED_MODULE_134__/* ["default"] */ .A,
-    'coinbaseinternational': _src_pro_coinbaseinternational_js__WEBPACK_IMPORTED_MODULE_135__/* ["default"] */ .A,
-    'coincheck': _src_pro_coincheck_js__WEBPACK_IMPORTED_MODULE_136__/* ["default"] */ .A,
-    'coinex': _src_pro_coinex_js__WEBPACK_IMPORTED_MODULE_137__/* ["default"] */ .A,
-    'coinone': _src_pro_coinone_js__WEBPACK_IMPORTED_MODULE_138__/* ["default"] */ .A,
-    'cryptocom': _src_pro_cryptocom_js__WEBPACK_IMPORTED_MODULE_139__/* ["default"] */ .A,
-    'currencycom': _src_pro_currencycom_js__WEBPACK_IMPORTED_MODULE_140__/* ["default"] */ .A,
-    'deribit': _src_pro_deribit_js__WEBPACK_IMPORTED_MODULE_141__/* ["default"] */ .A,
-    'exmo': _src_pro_exmo_js__WEBPACK_IMPORTED_MODULE_142__/* ["default"] */ .A,
-    'gate': _src_pro_gate_js__WEBPACK_IMPORTED_MODULE_143__/* ["default"] */ .A,
-    'gateio': _src_pro_gateio_js__WEBPACK_IMPORTED_MODULE_144__/* ["default"] */ .A,
-    'gemini': _src_pro_gemini_js__WEBPACK_IMPORTED_MODULE_145__/* ["default"] */ .A,
-    'hashkey': _src_pro_hashkey_js__WEBPACK_IMPORTED_MODULE_146__/* ["default"] */ .A,
-    'hitbtc': _src_pro_hitbtc_js__WEBPACK_IMPORTED_MODULE_147__/* ["default"] */ .A,
-    'hollaex': _src_pro_hollaex_js__WEBPACK_IMPORTED_MODULE_148__/* ["default"] */ .A,
-    'htx': _src_pro_htx_js__WEBPACK_IMPORTED_MODULE_149__/* ["default"] */ .A,
-    'huobi': _src_pro_huobi_js__WEBPACK_IMPORTED_MODULE_150__/* ["default"] */ .A,
-    'huobijp': _src_pro_huobijp_js__WEBPACK_IMPORTED_MODULE_151__/* ["default"] */ .A,
-    'hyperliquid': _src_pro_hyperliquid_js__WEBPACK_IMPORTED_MODULE_152__/* ["default"] */ .A,
-    'idex': _src_pro_idex_js__WEBPACK_IMPORTED_MODULE_153__/* ["default"] */ .A,
-    'independentreserve': _src_pro_independentreserve_js__WEBPACK_IMPORTED_MODULE_154__/* ["default"] */ .A,
-    'kraken': _src_pro_kraken_js__WEBPACK_IMPORTED_MODULE_155__/* ["default"] */ .A,
-    'krakenfutures': _src_pro_krakenfutures_js__WEBPACK_IMPORTED_MODULE_156__/* ["default"] */ .A,
-    'kucoin': _src_pro_kucoin_js__WEBPACK_IMPORTED_MODULE_157__/* ["default"] */ .A,
-    'kucoinfutures': _src_pro_kucoinfutures_js__WEBPACK_IMPORTED_MODULE_158__/* ["default"] */ .A,
-    'lbank': _src_pro_lbank_js__WEBPACK_IMPORTED_MODULE_159__/* ["default"] */ .A,
-    'luno': _src_pro_luno_js__WEBPACK_IMPORTED_MODULE_160__/* ["default"] */ .A,
-    'mexc': _src_pro_mexc_js__WEBPACK_IMPORTED_MODULE_161__/* ["default"] */ .A,
-    'ndax': _src_pro_ndax_js__WEBPACK_IMPORTED_MODULE_162__/* ["default"] */ .A,
-    'okcoin': _src_pro_okcoin_js__WEBPACK_IMPORTED_MODULE_163__/* ["default"] */ .A,
-    'okx': _src_pro_okx_js__WEBPACK_IMPORTED_MODULE_164__/* ["default"] */ .A,
-    'onetrading': _src_pro_onetrading_js__WEBPACK_IMPORTED_MODULE_165__/* ["default"] */ .A,
-    'oxfun': _src_pro_oxfun_js__WEBPACK_IMPORTED_MODULE_166__/* ["default"] */ .A,
-    'p2b': _src_pro_p2b_js__WEBPACK_IMPORTED_MODULE_167__/* ["default"] */ .A,
-    'paradex': _src_pro_paradex_js__WEBPACK_IMPORTED_MODULE_168__/* ["default"] */ .A,
-    'phemex': _src_pro_phemex_js__WEBPACK_IMPORTED_MODULE_169__/* ["default"] */ .A,
-    'poloniex': _src_pro_poloniex_js__WEBPACK_IMPORTED_MODULE_170__/* ["default"] */ .A,
-    'poloniexfutures': _src_pro_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_171__/* ["default"] */ .A,
-    'probit': _src_pro_probit_js__WEBPACK_IMPORTED_MODULE_172__/* ["default"] */ .A,
-    'upbit': _src_pro_upbit_js__WEBPACK_IMPORTED_MODULE_173__/* ["default"] */ .A,
-    'vertex': _src_pro_vertex_js__WEBPACK_IMPORTED_MODULE_174__/* ["default"] */ .A,
-    'wazirx': _src_pro_wazirx_js__WEBPACK_IMPORTED_MODULE_175__/* ["default"] */ .A,
-    'whitebit': _src_pro_whitebit_js__WEBPACK_IMPORTED_MODULE_176__/* ["default"] */ .A,
-    'woo': _src_pro_woo_js__WEBPACK_IMPORTED_MODULE_177__/* ["default"] */ .A,
-    'woofipro': _src_pro_woofipro_js__WEBPACK_IMPORTED_MODULE_178__/* ["default"] */ .A,
-    'xt': _src_pro_xt_js__WEBPACK_IMPORTED_MODULE_179__/* ["default"] */ .A,
+    'alpaca': _src_pro_alpaca_js__WEBPACK_IMPORTED_MODULE_110__/* ["default"] */ .A,
+    'ascendex': _src_pro_ascendex_js__WEBPACK_IMPORTED_MODULE_111__/* ["default"] */ .A,
+    'bequant': _src_pro_bequant_js__WEBPACK_IMPORTED_MODULE_112__/* ["default"] */ .A,
+    'binance': _src_pro_binance_js__WEBPACK_IMPORTED_MODULE_113__/* ["default"] */ .A,
+    'binancecoinm': _src_pro_binancecoinm_js__WEBPACK_IMPORTED_MODULE_114__/* ["default"] */ .A,
+    'binanceus': _src_pro_binanceus_js__WEBPACK_IMPORTED_MODULE_115__/* ["default"] */ .A,
+    'binanceusdm': _src_pro_binanceusdm_js__WEBPACK_IMPORTED_MODULE_116__/* ["default"] */ .A,
+    'bingx': _src_pro_bingx_js__WEBPACK_IMPORTED_MODULE_117__/* ["default"] */ .A,
+    'bitcoincom': _src_pro_bitcoincom_js__WEBPACK_IMPORTED_MODULE_118__/* ["default"] */ .A,
+    'bitfinex': _src_pro_bitfinex_js__WEBPACK_IMPORTED_MODULE_119__/* ["default"] */ .A,
+    'bitfinex2': _src_pro_bitfinex2_js__WEBPACK_IMPORTED_MODULE_120__/* ["default"] */ .A,
+    'bitget': _src_pro_bitget_js__WEBPACK_IMPORTED_MODULE_121__/* ["default"] */ .A,
+    'bithumb': _src_pro_bithumb_js__WEBPACK_IMPORTED_MODULE_122__/* ["default"] */ .A,
+    'bitmart': _src_pro_bitmart_js__WEBPACK_IMPORTED_MODULE_123__/* ["default"] */ .A,
+    'bitmex': _src_pro_bitmex_js__WEBPACK_IMPORTED_MODULE_124__/* ["default"] */ .A,
+    'bitopro': _src_pro_bitopro_js__WEBPACK_IMPORTED_MODULE_125__/* ["default"] */ .A,
+    'bitpanda': _src_pro_bitpanda_js__WEBPACK_IMPORTED_MODULE_126__/* ["default"] */ .A,
+    'bitrue': _src_pro_bitrue_js__WEBPACK_IMPORTED_MODULE_127__/* ["default"] */ .A,
+    'bitstamp': _src_pro_bitstamp_js__WEBPACK_IMPORTED_MODULE_128__/* ["default"] */ .A,
+    'bitvavo': _src_pro_bitvavo_js__WEBPACK_IMPORTED_MODULE_129__/* ["default"] */ .A,
+    'blockchaincom': _src_pro_blockchaincom_js__WEBPACK_IMPORTED_MODULE_130__/* ["default"] */ .A,
+    'blofin': _src_pro_blofin_js__WEBPACK_IMPORTED_MODULE_131__/* ["default"] */ .A,
+    'bybit': _src_pro_bybit_js__WEBPACK_IMPORTED_MODULE_132__/* ["default"] */ .A,
+    'cex': _src_pro_cex_js__WEBPACK_IMPORTED_MODULE_133__/* ["default"] */ .A,
+    'coinbase': _src_pro_coinbase_js__WEBPACK_IMPORTED_MODULE_134__/* ["default"] */ .A,
+    'coinbaseadvanced': _src_pro_coinbaseadvanced_js__WEBPACK_IMPORTED_MODULE_135__/* ["default"] */ .A,
+    'coinbaseexchange': _src_pro_coinbaseexchange_js__WEBPACK_IMPORTED_MODULE_136__/* ["default"] */ .A,
+    'coinbaseinternational': _src_pro_coinbaseinternational_js__WEBPACK_IMPORTED_MODULE_137__/* ["default"] */ .A,
+    'coincheck': _src_pro_coincheck_js__WEBPACK_IMPORTED_MODULE_138__/* ["default"] */ .A,
+    'coinex': _src_pro_coinex_js__WEBPACK_IMPORTED_MODULE_139__/* ["default"] */ .A,
+    'coinone': _src_pro_coinone_js__WEBPACK_IMPORTED_MODULE_140__/* ["default"] */ .A,
+    'cryptocom': _src_pro_cryptocom_js__WEBPACK_IMPORTED_MODULE_141__/* ["default"] */ .A,
+    'currencycom': _src_pro_currencycom_js__WEBPACK_IMPORTED_MODULE_142__/* ["default"] */ .A,
+    'deribit': _src_pro_deribit_js__WEBPACK_IMPORTED_MODULE_143__/* ["default"] */ .A,
+    'exmo': _src_pro_exmo_js__WEBPACK_IMPORTED_MODULE_144__/* ["default"] */ .A,
+    'gate': _src_pro_gate_js__WEBPACK_IMPORTED_MODULE_145__/* ["default"] */ .A,
+    'gateio': _src_pro_gateio_js__WEBPACK_IMPORTED_MODULE_146__/* ["default"] */ .A,
+    'gemini': _src_pro_gemini_js__WEBPACK_IMPORTED_MODULE_147__/* ["default"] */ .A,
+    'hashkey': _src_pro_hashkey_js__WEBPACK_IMPORTED_MODULE_148__/* ["default"] */ .A,
+    'hitbtc': _src_pro_hitbtc_js__WEBPACK_IMPORTED_MODULE_149__/* ["default"] */ .A,
+    'hollaex': _src_pro_hollaex_js__WEBPACK_IMPORTED_MODULE_150__/* ["default"] */ .A,
+    'htx': _src_pro_htx_js__WEBPACK_IMPORTED_MODULE_151__/* ["default"] */ .A,
+    'huobi': _src_pro_huobi_js__WEBPACK_IMPORTED_MODULE_152__/* ["default"] */ .A,
+    'huobijp': _src_pro_huobijp_js__WEBPACK_IMPORTED_MODULE_153__/* ["default"] */ .A,
+    'hyperliquid': _src_pro_hyperliquid_js__WEBPACK_IMPORTED_MODULE_154__/* ["default"] */ .A,
+    'idex': _src_pro_idex_js__WEBPACK_IMPORTED_MODULE_155__/* ["default"] */ .A,
+    'independentreserve': _src_pro_independentreserve_js__WEBPACK_IMPORTED_MODULE_156__/* ["default"] */ .A,
+    'kraken': _src_pro_kraken_js__WEBPACK_IMPORTED_MODULE_157__/* ["default"] */ .A,
+    'krakenfutures': _src_pro_krakenfutures_js__WEBPACK_IMPORTED_MODULE_158__/* ["default"] */ .A,
+    'kucoin': _src_pro_kucoin_js__WEBPACK_IMPORTED_MODULE_159__/* ["default"] */ .A,
+    'kucoinfutures': _src_pro_kucoinfutures_js__WEBPACK_IMPORTED_MODULE_160__/* ["default"] */ .A,
+    'lbank': _src_pro_lbank_js__WEBPACK_IMPORTED_MODULE_161__/* ["default"] */ .A,
+    'luno': _src_pro_luno_js__WEBPACK_IMPORTED_MODULE_162__/* ["default"] */ .A,
+    'mexc': _src_pro_mexc_js__WEBPACK_IMPORTED_MODULE_163__/* ["default"] */ .A,
+    'ndax': _src_pro_ndax_js__WEBPACK_IMPORTED_MODULE_164__/* ["default"] */ .A,
+    'okcoin': _src_pro_okcoin_js__WEBPACK_IMPORTED_MODULE_165__/* ["default"] */ .A,
+    'okx': _src_pro_okx_js__WEBPACK_IMPORTED_MODULE_166__/* ["default"] */ .A,
+    'onetrading': _src_pro_onetrading_js__WEBPACK_IMPORTED_MODULE_167__/* ["default"] */ .A,
+    'oxfun': _src_pro_oxfun_js__WEBPACK_IMPORTED_MODULE_168__/* ["default"] */ .A,
+    'p2b': _src_pro_p2b_js__WEBPACK_IMPORTED_MODULE_169__/* ["default"] */ .A,
+    'paradex': _src_pro_paradex_js__WEBPACK_IMPORTED_MODULE_170__/* ["default"] */ .A,
+    'phemex': _src_pro_phemex_js__WEBPACK_IMPORTED_MODULE_171__/* ["default"] */ .A,
+    'poloniex': _src_pro_poloniex_js__WEBPACK_IMPORTED_MODULE_172__/* ["default"] */ .A,
+    'poloniexfutures': _src_pro_poloniexfutures_js__WEBPACK_IMPORTED_MODULE_173__/* ["default"] */ .A,
+    'probit': _src_pro_probit_js__WEBPACK_IMPORTED_MODULE_174__/* ["default"] */ .A,
+    'upbit': _src_pro_upbit_js__WEBPACK_IMPORTED_MODULE_175__/* ["default"] */ .A,
+    'vertex': _src_pro_vertex_js__WEBPACK_IMPORTED_MODULE_176__/* ["default"] */ .A,
+    'wazirx': _src_pro_wazirx_js__WEBPACK_IMPORTED_MODULE_177__/* ["default"] */ .A,
+    'whitebit': _src_pro_whitebit_js__WEBPACK_IMPORTED_MODULE_178__/* ["default"] */ .A,
+    'woo': _src_pro_woo_js__WEBPACK_IMPORTED_MODULE_179__/* ["default"] */ .A,
+    'woofipro': _src_pro_woofipro_js__WEBPACK_IMPORTED_MODULE_180__/* ["default"] */ .A,
+    'xt': _src_pro_xt_js__WEBPACK_IMPORTED_MODULE_181__/* ["default"] */ .A,
 };
 for (const exchange in pro) {
     // const ccxtExchange = exchanges[exchange]
@@ -378440,7 +379848,7 @@ for (const exchange in pro) {
 pro.exchanges = Object.keys(pro);
 pro['Exchange'] = _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchange */ .k; // now the same for rest and ts
 //-----------------------------------------------------------------------------
-const ccxt = Object.assign({ version, Exchange: _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchange */ .k, Precise: _src_base_Precise_js__WEBPACK_IMPORTED_MODULE_180__/* .Precise */ .Y, 'exchanges': Object.keys(exchanges), 'pro': pro }, exchanges, _src_base_functions_js__WEBPACK_IMPORTED_MODULE_181__, _src_base_errors_js__WEBPACK_IMPORTED_MODULE_182__);
+const ccxt = Object.assign({ version, Exchange: _src_base_Exchange_js__WEBPACK_IMPORTED_MODULE_0__/* .Exchange */ .k, Precise: _src_base_Precise_js__WEBPACK_IMPORTED_MODULE_182__/* .Precise */ .Y, 'exchanges': Object.keys(exchanges), 'pro': pro }, exchanges, _src_base_functions_js__WEBPACK_IMPORTED_MODULE_183__, _src_base_errors_js__WEBPACK_IMPORTED_MODULE_184__);
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (ccxt);
 //-----------------------------------------------------------------------------
