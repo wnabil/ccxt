@@ -99,7 +99,7 @@ export class SHA2 extends Hash {
         return res;
     }
     _cloneInto(to) {
-        to || (to = new this.constructor());
+        to ||= new this.constructor();
         to.set(...this.get());
         const { blockLen, buffer, length, finished, destroyed, pos } = this;
         to.length = length;

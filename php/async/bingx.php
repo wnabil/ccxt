@@ -103,7 +103,7 @@ class bingx extends Exchange {
             ),
             'hostname' => 'bingx.com',
             'urls' => array(
-                'logo' => 'https://github-production-user-asset-6210df.s3.amazonaws.com/1294454/253675376-6983b72e-4999-4549-b177-33b374c195e3.jpg',
+                'logo' => 'https://github.com/user-attachments/assets/c5249c7b-03c7-47ad-96b6-3819b0ebd3be',
                 'api' => array(
                     'spot' => 'https://open-api.{hostname}/openApi',
                     'swap' => 'https://open-api.{hostname}/openApi',
@@ -210,6 +210,7 @@ class bingx extends Exchange {
                                 'market/markPriceKlines' => 1,
                                 'trade/batchCancelReplace' => 5,
                                 'trade/fullOrder' => 2,
+                                'positionMargin/history' => 2,
                             ),
                             'post' => array(
                                 'trade/cancelReplace' => 2,
@@ -2851,6 +2852,7 @@ class bingx extends Exchange {
              * @see https://bingx-api.github.io/docs/#/swapV2/trade-api.html#Bulk%20order
              * @param {Array} $orders list of $orders to create, each object should contain the parameters required by createOrder, namely $symbol, $type, $side, $amount, $price and $params
              * @param {array} [$params] extra parameters specific to the exchange API endpoint
+             * @param {boolean} [$params->sync] *spot only* if true, multiple $orders are ordered serially and all $orders do not require the same symbol/side/type
              * @return {array} an ~@link https://docs.ccxt.com/#/?id=order-structure order structure~
              */
             Async\await($this->load_markets());
@@ -2881,6 +2883,10 @@ class bingx extends Exchange {
                 $request['batchOrders'] = $this->json($ordersRequests);
                 $response = Async\await($this->swapV2PrivatePostTradeBatchOrders ($request));
             } else {
+                $sync = $this->safe_bool($params, 'sync', false);
+                if ($sync) {
+                    $request['sync'] = true;
+                }
                 $request['data'] = $this->json($ordersRequests);
                 $response = Async\await($this->spotV1PrivatePostTradeBatchOrders ($request));
             }
@@ -3336,7 +3342,7 @@ class bingx extends Exchange {
                 'cost' => Precise::string_abs($feeCost),
             ),
             'trades' => null,
-            'reduceOnly' => $this->safe_bool($order, 'reduceOnly'),
+            'reduceOnly' => $this->safe_bool_2($order, 'reduceOnly', 'ro'),
         ), $market);
     }
 
@@ -5325,7 +5331,7 @@ class bingx extends Exchange {
         return Async\async(function () use ($code, $amount, $address, $tag, $params) {
             /**
              * make a withdrawal
-             * @see https://bingx-api.github.io/docs/#/common/account-api.html#Withdraw
+             * @see https://bingx-api.github.io/docs/#/en-us/spot/wallet-api.html#Withdraw
              * @param {string} $code unified $currency $code
              * @param {float} $amount the $amount to withdraw
              * @param {string} $address the $address to withdraw to
@@ -5334,6 +5340,8 @@ class bingx extends Exchange {
              * @param {int} [$params->walletType] 1 fund account, 2 standard account, 3 perpetual account
              * @return {array} a ~@link https://docs.ccxt.com/#/?id=transaction-structure transaction structure~
              */
+            list($tag, $params) = $this->handle_withdraw_tag_and_params($tag, $params);
+            $this->check_address($address);
             Async\await($this->load_markets());
             $currency = $this->currency($code);
             $walletType = $this->safe_integer($params, 'walletType');
@@ -5352,6 +5360,9 @@ class bingx extends Exchange {
             $network = $this->safe_string_upper($params, 'network');
             if ($network !== null) {
                 $request['network'] = $this->network_code_to_id($network);
+            }
+            if ($tag !== null) {
+                $request['addressTag'] = $tag;
             }
             $params = $this->omit($params, array( 'walletType', 'network' ));
             $response = Async\await($this->walletsV1PrivatePostCapitalWithdrawApply ($this->extend($request, $params)));

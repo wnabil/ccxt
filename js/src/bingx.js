@@ -94,7 +94,7 @@ export default class bingx extends Exchange {
             },
             'hostname': 'bingx.com',
             'urls': {
-                'logo': 'https://github-production-user-asset-6210df.s3.amazonaws.com/1294454/253675376-6983b72e-4999-4549-b177-33b374c195e3.jpg',
+                'logo': 'https://github.com/user-attachments/assets/c5249c7b-03c7-47ad-96b6-3819b0ebd3be',
                 'api': {
                     'spot': 'https://open-api.{hostname}/openApi',
                     'swap': 'https://open-api.{hostname}/openApi',
@@ -201,6 +201,7 @@ export default class bingx extends Exchange {
                                 'market/markPriceKlines': 1,
                                 'trade/batchCancelReplace': 5,
                                 'trade/fullOrder': 2,
+                                'positionMargin/history': 2,
                             },
                             'post': {
                                 'trade/cancelReplace': 2,
@@ -2851,6 +2852,7 @@ export default class bingx extends Exchange {
          * @see https://bingx-api.github.io/docs/#/swapV2/trade-api.html#Bulk%20order
          * @param {Array} orders list of orders to create, each object should contain the parameters required by createOrder, namely symbol, type, side, amount, price and params
          * @param {object} [params] extra parameters specific to the exchange API endpoint
+         * @param {boolean} [params.sync] *spot only* if true, multiple orders are ordered serially and all orders do not require the same symbol/side/type
          * @returns {object} an [order structure]{@link https://docs.ccxt.com/#/?id=order-structure}
          */
         await this.loadMarkets();
@@ -2883,6 +2885,10 @@ export default class bingx extends Exchange {
             response = await this.swapV2PrivatePostTradeBatchOrders(request);
         }
         else {
+            const sync = this.safeBool(params, 'sync', false);
+            if (sync) {
+                request['sync'] = true;
+            }
             request['data'] = this.json(ordersRequests);
             response = await this.spotV1PrivatePostTradeBatchOrders(request);
         }
@@ -3336,7 +3342,7 @@ export default class bingx extends Exchange {
                 'cost': Precise.stringAbs(feeCost),
             },
             'trades': undefined,
-            'reduceOnly': this.safeBool(order, 'reduceOnly'),
+            'reduceOnly': this.safeBool2(order, 'reduceOnly', 'ro'),
         }, market);
     }
     parseOrderStatus(status) {
@@ -5313,7 +5319,7 @@ export default class bingx extends Exchange {
          * @method
          * @name bingx#withdraw
          * @description make a withdrawal
-         * @see https://bingx-api.github.io/docs/#/common/account-api.html#Withdraw
+         * @see https://bingx-api.github.io/docs/#/en-us/spot/wallet-api.html#Withdraw
          * @param {string} code unified currency code
          * @param {float} amount the amount to withdraw
          * @param {string} address the address to withdraw to
@@ -5322,6 +5328,8 @@ export default class bingx extends Exchange {
          * @param {int} [params.walletType] 1 fund account, 2 standard account, 3 perpetual account
          * @returns {object} a [transaction structure]{@link https://docs.ccxt.com/#/?id=transaction-structure}
          */
+        [tag, params] = this.handleWithdrawTagAndParams(tag, params);
+        this.checkAddress(address);
         await this.loadMarkets();
         const currency = this.currency(code);
         let walletType = this.safeInteger(params, 'walletType');
@@ -5340,6 +5348,9 @@ export default class bingx extends Exchange {
         const network = this.safeStringUpper(params, 'network');
         if (network !== undefined) {
             request['network'] = this.networkCodeToId(network);
+        }
+        if (tag !== undefined) {
+            request['addressTag'] = tag;
         }
         params = this.omit(params, ['walletType', 'network']);
         const response = await this.walletsV1PrivatePostCapitalWithdrawApply(this.extend(request, params));

@@ -113,7 +113,7 @@ class bingx(Exchange, ImplicitAPI):
             },
             'hostname': 'bingx.com',
             'urls': {
-                'logo': 'https://github-production-user-asset-6210df.s3.amazonaws.com/1294454/253675376-6983b72e-4999-4549-b177-33b374c195e3.jpg',
+                'logo': 'https://github.com/user-attachments/assets/c5249c7b-03c7-47ad-96b6-3819b0ebd3be',
                 'api': {
                     'spot': 'https://open-api.{hostname}/openApi',
                     'swap': 'https://open-api.{hostname}/openApi',
@@ -220,6 +220,7 @@ class bingx(Exchange, ImplicitAPI):
                                 'market/markPriceKlines': 1,
                                 'trade/batchCancelReplace': 5,
                                 'trade/fullOrder': 2,
+                                'positionMargin/history': 2,
                             },
                             'post': {
                                 'trade/cancelReplace': 2,
@@ -2677,6 +2678,7 @@ class bingx(Exchange, ImplicitAPI):
         :see: https://bingx-api.github.io/docs/#/swapV2/trade-api.html#Bulk%20order
         :param Array orders: list of orders to create, each object should contain the parameters required by createOrder, namely symbol, type, side, amount, price and params
         :param dict [params]: extra parameters specific to the exchange API endpoint
+        :param boolean [params.sync]: *spot only* if True, multiple orders are ordered serially and all orders do not require the same symbol/side/type
         :returns dict: an `order structure <https://docs.ccxt.com/#/?id=order-structure>`
         """
         await self.load_markets()
@@ -2704,6 +2706,9 @@ class bingx(Exchange, ImplicitAPI):
             request['batchOrders'] = self.json(ordersRequests)
             response = await self.swapV2PrivatePostTradeBatchOrders(request)
         else:
+            sync = self.safe_bool(params, 'sync', False)
+            if sync:
+                request['sync'] = True
             request['data'] = self.json(ordersRequests)
             response = await self.spotV1PrivatePostTradeBatchOrders(request)
         #
@@ -3140,7 +3145,7 @@ class bingx(Exchange, ImplicitAPI):
                 'cost': Precise.string_abs(feeCost),
             },
             'trades': None,
-            'reduceOnly': self.safe_bool(order, 'reduceOnly'),
+            'reduceOnly': self.safe_bool_2(order, 'reduceOnly', 'ro'),
         }, market)
 
     def parse_order_status(self, status: Str):
@@ -4981,7 +4986,7 @@ class bingx(Exchange, ImplicitAPI):
     async def withdraw(self, code: str, amount: float, address: str, tag=None, params={}):
         """
         make a withdrawal
-        :see: https://bingx-api.github.io/docs/#/common/account-api.html#Withdraw
+        :see: https://bingx-api.github.io/docs/#/en-us/spot/wallet-api.html#Withdraw
         :param str code: unified currency code
         :param float amount: the amount to withdraw
         :param str address: the address to withdraw to
@@ -4990,6 +4995,8 @@ class bingx(Exchange, ImplicitAPI):
         :param int [params.walletType]: 1 fund account, 2 standard account, 3 perpetual account
         :returns dict: a `transaction structure <https://docs.ccxt.com/#/?id=transaction-structure>`
         """
+        tag, params = self.handle_withdraw_tag_and_params(tag, params)
+        self.check_address(address)
         await self.load_markets()
         currency = self.currency(code)
         walletType = self.safe_integer(params, 'walletType')
@@ -5006,6 +5013,8 @@ class bingx(Exchange, ImplicitAPI):
         network = self.safe_string_upper(params, 'network')
         if network is not None:
             request['network'] = self.network_code_to_id(network)
+        if tag is not None:
+            request['addressTag'] = tag
         params = self.omit(params, ['walletType', 'network'])
         response = await self.walletsV1PrivatePostCapitalWithdrawApply(self.extend(request, params))
         data = self.safe_value(response, 'data')

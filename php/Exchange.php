@@ -43,7 +43,7 @@ use BN\BN;
 use Sop\ASN1\Type\UnspecifiedType;
 use Exception;
 
-$version = '4.4.19';
+$version = '4.4.26';
 
 // rounding mode
 const TRUNCATE = 0;
@@ -62,7 +62,7 @@ const PAD_WITH_ZERO = 6;
 
 class Exchange {
 
-    const VERSION = '4.4.19';
+    const VERSION = '4.4.26';
 
     private static $base58_alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     private static $base58_encoder = null;
@@ -122,6 +122,7 @@ class Exchange {
     public $hostname = null; // in case of inaccessibility of the "main" domain
 
     public $options = array(); // exchange-specific options if any
+    public $isSandboxModeEnabled = false;
 
     public $skipJsonOnStatusCodes = false; // TODO: reserved, rewrite the curl routine to parse JSON body anyway
     public $quoteJsonNumbers = true; // treat numbers in json as quoted precise strings
@@ -375,6 +376,7 @@ class Exchange {
         'coinbaseadvanced',
         'coinbaseexchange',
         'coinbaseinternational',
+        'coincatch',
         'coincheck',
         'coinex',
         'coinlist',
@@ -2386,6 +2388,8 @@ class Exchange {
                 'fetchLeverages' => null,
                 'fetchLeverageTiers' => null,
                 'fetchLiquidations' => null,
+                'fetchLongShortRatio' => null,
+                'fetchLongShortRatioHistory' => null,
                 'fetchMarginMode' => null,
                 'fetchMarginModes' => null,
                 'fetchMarketLeverageTiers' => null,
@@ -2954,6 +2958,8 @@ class Exchange {
             } else {
                 throw new NotSupported($this->id . ' does not have a sandbox URL');
             }
+            // set flag
+            $this->isSandboxModeEnabled = true;
         } elseif (is_array($this->urls) && array_key_exists('apiBackup', $this->urls)) {
             if (gettype($this->urls['api']) === 'string') {
                 $this->urls['api'] = $this->urls['apiBackup'];
@@ -2962,6 +2968,8 @@ class Exchange {
             }
             $newUrls = $this->omit($this->urls, 'apiBackup');
             $this->urls = $newUrls;
+            // set flag
+            $this->isSandboxModeEnabled = false;
         }
     }
 
@@ -3245,6 +3253,14 @@ class Exchange {
 
     public function set_margin(string $symbol, float $amount, $params = array ()) {
         throw new NotSupported($this->id . ' setMargin() is not supported yet');
+    }
+
+    public function fetch_long_short_ratio(string $symbol, ?string $timeframe = null, $params = array ()) {
+        throw new NotSupported($this->id . ' fetchLongShortRatio() is not supported yet');
+    }
+
+    public function fetch_long_short_ratio_history(?string $symbol = null, ?string $timeframe = null, ?int $since = null, ?int $limit = null, $params = array ()) {
+        throw new NotSupported($this->id . ' fetchLongShortRatioHistory() is not supported yet');
     }
 
     public function fetch_margin_adjustment_history(?string $symbol = null, ?string $type = null, ?float $since = null, ?float $limit = null, $params = array ()) {
@@ -3672,9 +3688,10 @@ class Exchange {
         $isTriggerOrSLTpOrder = (($this->safe_string($order, 'triggerPrice') !== null || ($this->safe_string($order, 'stopLossPrice') !== null)) || ($this->safe_string($order, 'takeProfitPrice') !== null));
         if ($parseFilled || $parseCost || $shouldParseFees) {
             $rawTrades = $this->safe_value($order, 'trades', $trades);
-            $oldNumber = $this->number;
+            // $oldNumber = $this->number;
             // we parse $trades here!
-            $this->number = 'strval';
+            // $i don't think this is needed anymore
+            // $this->number = 'strval';
             $firstTrade = $this->safe_value($rawTrades, 0);
             // parse $trades if they haven't already been parsed
             $tradesAreParsed = (($firstTrade !== null) && (is_array($firstTrade) && array_key_exists('info', $firstTrade)) && (is_array($firstTrade) && array_key_exists('id', $firstTrade)));
@@ -3683,7 +3700,7 @@ class Exchange {
             } else {
                 $trades = $rawTrades;
             }
-            $this->number = $oldNumber;
+            // $this->number = $oldNumber; why parse $trades if you read the value using `safeString` ?
             $tradesLength = 0;
             $isArray = gettype($trades) === 'array' && array_keys($trades) === array_keys(array_keys($trades));
             if ($isArray) {
@@ -4279,15 +4296,15 @@ class Exchange {
         ));
     }
 
-    public function fetch_borrow_rate(string $code, $amount, $params = array ()) {
+    public function fetch_borrow_rate(string $code, float $amount, $params = array ()) {
         throw new NotSupported($this->id . ' fetchBorrowRate is deprecated, please use fetchCrossBorrowRate or fetchIsolatedBorrowRate instead');
     }
 
-    public function repay_cross_margin(string $code, $amount, $params = array ()) {
+    public function repay_cross_margin(string $code, float $amount, $params = array ()) {
         throw new NotSupported($this->id . ' repayCrossMargin is not support yet');
     }
 
-    public function repay_isolated_margin(string $symbol, string $code, $amount, $params = array ()) {
+    public function repay_isolated_margin(string $symbol, string $code, float $amount, $params = array ()) {
         throw new NotSupported($this->id . ' repayIsolatedMargin is not support yet');
     }
 
@@ -4299,11 +4316,11 @@ class Exchange {
         throw new NotSupported($this->id . ' borrowIsolatedMargin is not support yet');
     }
 
-    public function borrow_margin(string $code, $amount, ?string $symbol = null, $params = array ()) {
+    public function borrow_margin(string $code, float $amount, ?string $symbol = null, $params = array ()) {
         throw new NotSupported($this->id . ' borrowMargin is deprecated, please use borrowCrossMargin or borrowIsolatedMargin instead');
     }
 
-    public function repay_margin(string $code, $amount, ?string $symbol = null, $params = array ()) {
+    public function repay_margin(string $code, float $amount, ?string $symbol = null, $params = array ()) {
         throw new NotSupported($this->id . ' repayMargin is deprecated, please use repayCrossMargin or repayIsolatedMargin instead');
     }
 
@@ -6704,6 +6721,21 @@ class Exchange {
         return $interests;
     }
 
+    public function parse_borrow_rate($info, ?array $currency = null) {
+        throw new NotSupported($this->id . ' parseBorrowRate() is not supported yet');
+    }
+
+    public function parse_borrow_rate_history($response, ?string $code, ?int $since, ?int $limit) {
+        $result = array();
+        for ($i = 0; $i < count($response); $i++) {
+            $item = $response[$i];
+            $borrowRate = $this->parse_borrow_rate($item);
+            $result[] = $borrowRate;
+        }
+        $sorted = $this->sort_by($result, 'timestamp');
+        return $this->filter_by_currency_since_limit($sorted, $code, $since, $limit);
+    }
+
     public function parse_isolated_borrow_rates(mixed $info) {
         $result = array();
         for ($i = 0; $i < count($info); $i++) {
@@ -6742,6 +6774,21 @@ class Exchange {
             $result[$parsed['symbol']] = $parsed;
         }
         return $result;
+    }
+
+    public function parse_long_short_ratio(array $info, ?array $market = null) {
+        throw new NotSupported($this->id . ' parseLongShortRatio() is not supported yet');
+    }
+
+    public function parse_long_short_ratio_history($response, $market = null, ?int $since = null, ?int $limit = null) {
+        $rates = array();
+        for ($i = 0; $i < count($response); $i++) {
+            $entry = $response[$i];
+            $rates[] = $this->parse_long_short_ratio($entry, $market);
+        }
+        $sorted = $this->sort_by($rates, 'timestamp');
+        $symbol = ($market === null) ? null : $market['symbol'];
+        return $this->filter_by_symbol_since_limit($sorted, $symbol, $since, $limit);
     }
 
     public function handle_trigger_and_params($params) {

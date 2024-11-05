@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 
-__version__ = '4.4.19'
+__version__ = '4.4.26'
 
 # -----------------------------------------------------------------------------
 
@@ -707,6 +707,12 @@ class Exchange(BaseExchange):
     async def set_margin(self, symbol: str, amount: float, params={}):
         raise NotSupported(self.id + ' setMargin() is not supported yet')
 
+    async def fetch_long_short_ratio(self, symbol: str, timeframe: Str = None, params={}):
+        raise NotSupported(self.id + ' fetchLongShortRatio() is not supported yet')
+
+    async def fetch_long_short_ratio_history(self, symbol: Str = None, timeframe: Str = None, since: Int = None, limit: Int = None, params={}):
+        raise NotSupported(self.id + ' fetchLongShortRatioHistory() is not supported yet')
+
     async def fetch_margin_adjustment_history(self, symbol: Str = None, type: Str = None, since: Num = None, limit: Num = None, params={}):
         """
         fetches the history of margin added or reduced from contract isolated positions
@@ -737,13 +743,13 @@ class Exchange(BaseExchange):
     async def fetch_payment_methods(self, params={}):
         raise NotSupported(self.id + ' fetchPaymentMethods() is not supported yet')
 
-    async def fetch_borrow_rate(self, code: str, amount, params={}):
+    async def fetch_borrow_rate(self, code: str, amount: float, params={}):
         raise NotSupported(self.id + ' fetchBorrowRate is deprecated, please use fetchCrossBorrowRate or fetchIsolatedBorrowRate instead')
 
-    async def repay_cross_margin(self, code: str, amount, params={}):
+    async def repay_cross_margin(self, code: str, amount: float, params={}):
         raise NotSupported(self.id + ' repayCrossMargin is not support yet')
 
-    async def repay_isolated_margin(self, symbol: str, code: str, amount, params={}):
+    async def repay_isolated_margin(self, symbol: str, code: str, amount: float, params={}):
         raise NotSupported(self.id + ' repayIsolatedMargin is not support yet')
 
     async def borrow_cross_margin(self, code: str, amount: float, params={}):
@@ -752,10 +758,10 @@ class Exchange(BaseExchange):
     async def borrow_isolated_margin(self, symbol: str, code: str, amount: float, params={}):
         raise NotSupported(self.id + ' borrowIsolatedMargin is not support yet')
 
-    async def borrow_margin(self, code: str, amount, symbol: Str = None, params={}):
+    async def borrow_margin(self, code: str, amount: float, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' borrowMargin is deprecated, please use borrowCrossMargin or borrowIsolatedMargin instead')
 
-    async def repay_margin(self, code: str, amount, symbol: Str = None, params={}):
+    async def repay_margin(self, code: str, amount: float, symbol: Str = None, params={}):
         raise NotSupported(self.id + ' repayMargin is deprecated, please use repayCrossMargin or repayIsolatedMargin instead')
 
     async def fetch_ohlcv(self, symbol: str, timeframe='1m', since: Int = None, limit: Int = None, params={}):
